@@ -15,9 +15,8 @@ from logging.config import fileConfig
 from pathlib import Path
 import sys
 
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Make the application package importable when Alembic is invoked from any cwd.
 REPO_ROOT = Path(__file__).resolve().parent.parent

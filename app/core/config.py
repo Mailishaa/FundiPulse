@@ -76,6 +76,43 @@ def _normalise_origin(value: str) -> str:
     return origin.lower()
 
 
+#: Credential pairs that ship in ``.env.example`` and in the local
+#: ``docker-compose.yml``. Reaching production with any of them means the
+#: database was never configured, so the process must refuse to start rather than
+#: quietly connect somewhere unintended.
+PLACEHOLDER_DATABASE_CREDENTIALS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("postgres", "postgres"),
+        ("fundipulse", "fundipulse"),
+        ("postgres", "password"),
+        ("root", "root"),
+        ("admin", "admin"),
+    }
+)
+
+
+def uses_placeholder_database_credentials(url: str) -> bool:
+    """Whether ``url`` embeds a shipped example credential.
+
+    Checked only for production. A developer running locally against the
+    documented example credentials is the intended workflow and must not be
+    blocked; a production deployment is not.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return True
+
+    if not parts.username:
+        return False
+
+    username = unquote(parts.username)
+    password = unquote(parts.password or "")
+    return (username, password) in PLACEHOLDER_DATABASE_CREDENTIALS
+
+
 class Settings(BaseSettings):
     """Typed, validated application settings."""
 
@@ -302,6 +339,12 @@ class Settings(BaseSettings):
 
         if self.database_echo:
             problems.append("DATABASE_ECHO must be false in production.")
+
+        if uses_placeholder_database_credentials(self.database_url):
+            problems.append(
+                "DATABASE_URL still carries the local development placeholder "
+                "credentials. Set it to the real managed database URL."
+            )
 
         if self.sentry_dsn.get_secret_value():
             problems.append(

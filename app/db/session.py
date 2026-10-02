@@ -101,12 +101,21 @@ def reset_engine() -> None:
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency yielding a request-scoped session.
 
-    The session is rolled back on any exception, so a failed request can never
-    leave partial writes committed.
+    One request is one transaction. The commit happens here, after the route has
+    returned successfully, so:
+
+    * a request that raises leaves nothing behind (the rollback branch runs), and
+    * a service that writes a domain change and an audit row in the same session
+      commits both or neither.
+
+    Committing inside the service instead would let it commit early and then fail
+    later, leaving a half-applied operation that its audit row claims completed.
+    Keeping the commit at the boundary is what makes the audit trail trustworthy.
     """
     session = get_session_factory()()
     try:
         yield session
+        session.commit()
     except Exception:
         session.rollback()
         raise

@@ -26,6 +26,10 @@ $$ LANGUAGE plpgsql;
 """
 
 CREATE_AUDIT_LOG_GUARD_TRIGGER = """
+-- DROP first so the statement is idempotent. A migration that is re-applied, or
+-- that failed after this step and is retried, must not fail on DuplicateObject.
+DROP TRIGGER IF EXISTS audit_logs_append_only ON audit_logs;
+
 CREATE TRIGGER audit_logs_append_only
 BEFORE UPDATE OR DELETE ON audit_logs
 FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
@@ -44,6 +48,11 @@ _LOWERCASE_EMAIL_CONSTRAINTS: tuple[tuple[str, str], ...] = (
     ("verification_requests", "ck_verification_requests_verifier_email_lowercase"),
     ("worker_references", "ck_worker_references_email_lowercase"),
 )
+
+_AVAILABILITY_CHECK_DROP = """
+ALTER TABLE worker_profiles
+DROP CONSTRAINT IF EXISTS ck_worker_profiles_available_from_required
+"""
 
 _AVAILABILITY_CHECK = """
 ALTER TABLE worker_profiles
@@ -92,6 +101,7 @@ def add_availability_consistency_check(connection: Connection) -> None:
     Catching it here means a bug in one code path cannot publish a profile that
     an employer would read as "no idea when".
     """
+    connection.execute(text(_AVAILABILITY_CHECK_DROP))
     connection.execute(text(_AVAILABILITY_CHECK))
 
 

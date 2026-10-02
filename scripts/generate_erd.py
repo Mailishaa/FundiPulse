@@ -16,8 +16,8 @@ Optionally write the result straight into ``docs/data-model.md`` between the
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
+import sys
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -141,16 +141,12 @@ def _collect_relations() -> list[str]:
         table = Base.metadata.tables[table_name]
         if table_name in _SKIP_RELATION_TABLES:
             continue
-        for constraint in sorted(
-            table.foreign_key_constraints, key=lambda c: str(c.elements)
-        ):
+        for constraint in sorted(table.foreign_key_constraints, key=lambda c: str(c.elements)):
             for element in constraint.elements:
                 target = element.column.table.name
                 parent = element.parent
                 # Cardinality is always one-to-many from the referenced side.
-                lines.append(
-                    f'    {target} "1" ||--|.. {table_name} "{parent.name}"'
-                )
+                lines.append(f'    {target} "1" ||--|.. {table_name} "{parent.name}"')
     return sorted(set(lines))
 
 

@@ -45,12 +45,30 @@ def canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def parse_direct_requirements(path: Path) -> list[str]:
-    """Return canonical distribution names declared in an ``.in`` file."""
+def parse_direct_requirements(path: Path, _seen: set[Path] | None = None) -> list[str]:
+    """Return canonical distribution names declared in an ``.in`` file.
+
+    Follows ``-r``/``--requirement`` includes recursively. ``dev.in`` includes
+    ``base.in``; skipping those would produce a ``dev.txt`` containing the test
+    tooling but silently omitting the application itself - a lock file that
+    installs cleanly and then fails at import time.
+    """
+    seen = _seen if _seen is not None else set()
+    resolved_path = path.resolve()
+    if resolved_path in seen:
+        return []
+    seen.add(resolved_path)
+
     names: list[str] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.split("#", 1)[0].strip()
-        if not line or line.startswith("-"):
+        if not line:
+            continue
+        if line.startswith(("-r ", "--requirement ")):
+            include = line.split(maxsplit=1)[1].strip()
+            names.extend(parse_direct_requirements(path.parent / include, seen))
+            continue
+        if line.startswith("-"):
             continue
         match = REQUIREMENT_RE.match(line)
         if match:

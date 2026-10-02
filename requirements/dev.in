@@ -9,3 +9,5 @@ ruff>=0.6
 mypy>=1.11
 bandit>=1.7
 pip-audit>=2.7
+# Used by scripts/lock_requirements.py to evaluate PEP 508 markers.
+packaging>=24

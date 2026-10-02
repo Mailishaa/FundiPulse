@@ -1,0 +1,36 @@
+# Local development services.
+#
+# Production deployment is documented in docs/deployment.md. Render manages its
+# own PostgreSQL; this file exists so a developer can reproduce the environment
+# with one command.
+#
+#   docker compose up -d db
+#
+# Only the database is defined here. Running the API in Docker is an optional
+# later step (see `docker compose --profile app up`).
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fundipulse-db
+    environment:
+      POSTGRES_USER: fundipulse
+      POSTGRES_PASSWORD: fundipulse
+      POSTGRES_DB: fundipulse
+      # Creates fundipulse_test as well, so the suite never needs the dev DB.
+      POSTGRES_MULTIPLE_DATABASES: fundipulse_test
+    ports:
+      - "5432:5432"
+    volumes:
+      - fundipulse_pgdata:/var/lib/postgresql/data
+      - ./scripts/create_extra_databases.sh:/docker-entrypoint-initdb.d/10-create-extra-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fundipulse -d fundipulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  fundipulse_pgdata:
+    name: fundipulse_pgdata

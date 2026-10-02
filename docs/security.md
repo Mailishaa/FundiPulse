@@ -308,9 +308,10 @@ Future ingestion must, per `docs/architecture.md` and `job_sources` in the schem
 
 | Risk | Severity | Mitigation / next step |
 | --- | --- | --- |
-| No rate limiting yet | High | Phase 6. Without it, credential stuffing and enumeration are unthrottled. |
+| Rate limiting not bound to any endpoint | High | The limiter, its rules and its Redis backend are built and tested, but no route declares a limit yet, so requests are still unthrottled. Phase 6 binds it per endpoint.
+| Redis rate-limit backend unverified against a real server | Medium | Exercised only through an injected fake client, so the Lua script has never executed. Smoke-test before relying on it.
 | No email provider | Medium | Phase 2 gap by design. `NullTokenDeliveryChannel` fails loudly rather than silently dropping reset mail. |
-| No file-upload endpoint | Medium | Phase 6. `files` is metadata-only today. |
+| No file-upload endpoint | Medium | The storage layer and byte-level inspection are built and tested, but no route is mounted, so `files` stays metadata-only. Phase 6. |
 | No alerting on security events | High | Needs log shipping plus rules before production. |
 | Audit rows survive indefinitely | Low | Retention policy needs legal input. |
 | No dependency-update automation | Medium | `dependabot.yml` in Phase 8. |

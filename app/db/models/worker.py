@@ -321,7 +321,11 @@ class WorkExperience(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin)
             name="work_experiences_end_after_start",
         ),
         CheckConstraint(
-            "(end_date IS NULL) != is_current",
+            # "Exactly one of is_current / end_date is set" means the two agree:
+            # a current role has no end date, an ended role has one. Written as
+            # equality rather than inequality, because `!=` rejects the valid
+            # current-role case (NULL end date, is_current true).
+            "(end_date IS NULL) = is_current",
             name="work_experiences_current_matches_end_date",
         ),
         Index("ix_work_experiences_profile", "worker_profile_id", "deleted_at"),

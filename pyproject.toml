@@ -1,0 +1,195 @@
+[project]
+name = "fundipulse-api"
+version = "0.1.0"
+description = "Production REST API for FundiPulse, a Kenyan construction workforce platform."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "sqlalchemy>=2.0.30,<2.1",
+    "alembic>=1.13,<2.0",
+    "pydantic>=2.9,<3.0",
+    "pydantic-settings>=2.5,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.8",
+    "boto3>=1.35",
+    "python-multipart>=0.0.9",
+    "email-validator>=2.2",
+    "orjson>=3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+]
+
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+# ===========================================================================
+# Ruff - lint + format
+# ===========================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests", "alembic"]
+extend-exclude = [".venv", "alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez - never use naive datetimes
+    "T20",    # flake8-print - no print() in application code
+    "ARG",    # flake8-unused-arguments
+    "BLE",    # blind except
+    "S",      # flake8-bandit
+    "PTH",    # flake8-use-pathlib
+    "RUF",    # ruff specific
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "PTH",
+    "FA",     # flake8-future-annotations
+    "ISC",    # flake8-implicit-str-concat
+]
+ignore = [
+    "S101",    # assert - used intentionally in test suite only
+    "B008",    # FastAPI Depends() in defaults is the documented pattern
+    "RUF012",  # ClassVar annotations - noisy for SQLAlchemy/Pydantic models
+    "E501",    # line length enforced by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "ARG", "PLR2004", "N806", "B008", "S101"]
+"alembic/**" = ["E501", "ARG001", "SIM103"]
+"app/db/models/**" = ["A003", "N815"]
+"scripts/**" = ["T201", "S603", "S607"]
+# S105 flags any name containing PASSWORD/SECRET/TOKEN assigned a string.
+# In app/core/constants.py those are controlled-vocabulary enum members
+# (e.g. AuditAction.PASSWORD_CHANGED = "PASSWORD_CHANGED"), not credentials.
+# The real secret handling is in app/core/config.py, which stays un-ignored.
+"app/core/constants.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+
+# ===========================================================================
+# MyPy
+# ===========================================================================
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+warn_no_return = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = false
+plugins = ["pydantic.mypy"]
+exclude = ["^alembic/versions/", "^\\.venv/", "^build/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "boto3.*", "botocore.*", "argon2.*", "jwt.*", "psycopg.*",
+    "email_validator.*", "hypothesis.*", "orjson.*",
+]
+ignore_missing_imports = true
+
+# ===========================================================================
+# Pytest
+# ===========================================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+]
+markers = [
+    "unit: fast isolated tests with no database",
+    "integration: exercises database and service layers",
+    "api: exercises the HTTP surface through ASGI transport",
+    "security: adversarial / regression security tests",
+    "slow: tests that take a noticeable amount of time",
+]
+filterwarnings = [
+    "error::DeprecationWarning:app.*",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = [
+    "app/main.py",
+    "app/db/models/*",
+    "*/__init__.py",
+    "app/core/config.py",
+]
+parallel = true
+source_pkgs = ["app"]
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+skip_covered = false
+# Application-code coverage gate enforced by CI (see pytest addopts below).
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+    "if __name__ == .__main__.:",
+    "class .*\\(Protocol\\):",
+    "def __repr__",
+]
+
+[tool.coverage.json]
+output = "coverage.json"
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "alembic/versions", "node_modules"]
+# B104 is hardcoded_bind_all_interfaces: uvicorn binds 0.0.0.0 inside a
+# container by design (Render requires it). Configuration is env-driven.
+skips = ["B104"]
+
+# ===========================================================================
+# pip-audit
+# ===========================================================================
+[tool.pip_audit]
+# Fail the build on any actionable finding, including low severity, so that
+# newly introduced issues cannot be merged unnoticed.
+ignore_vulns = []

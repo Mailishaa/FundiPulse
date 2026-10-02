@@ -187,6 +187,13 @@ class HealthStatus(BaseModel):
     latency_ms: float | None = None
 
 
+class StatusResponse(ApiModel):
+    """A short acknowledgement where no resource is returned."""
+
+    status: str = Field(description="Machine-readable outcome, e.g. DELETED.")
+    message: str | None = None
+
+
 class MessageResponse(ApiModel):
     """A simple acknowledgement where no resource is returned.
 

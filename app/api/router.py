@@ -8,21 +8,19 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.routes import auth, health, users
+from app.api.routes import auth, catalogue, health, users, workers
 
-#: Health probes are **unversioned**.
-#
-#: A load balancer or orchestrator points at a fixed path. Versioning the health
-#: endpoint means an infrastructure config change is required for every future API
-#: version, and an orchestrator that cannot reach the health check restarts a
-#: healthy service. The endpoint therefore has a deliberately boring, stable URL.
+#: Health probes are unversioned. A load balancer points at a fixed path, and
+#: versioning it would mean an infrastructure change for every future API version.
 health_router = APIRouter()
 health_router.include_router(health.router)
 
-#: Everything else lives under the versioned prefix.
 api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(users.me_router)
 api_router.include_router(users.admin_router)
+api_router.include_router(workers.router)
+api_router.include_router(catalogue.router)
+api_router.include_router(catalogue.admin_router)
 
 __all__ = ["api_router", "health_router"]

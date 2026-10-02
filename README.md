@@ -62,7 +62,7 @@ delivery, star ratings, and a general-purpose web scraper. See
 | --- | --- | --- |
 | 1 | Repository inspection, architecture, data model, migrations | **Complete** (PR #1) |
 | 2 | Authentication, authorisation, users | **Complete** (PR #2) |
-| 3 | Worker profiles, trades, skills, projects, experiences | Not started |
+| 3 | Worker profiles, trades, skills, projects, experiences | **Complete** (PR #3) |
 | 4 | References, verification, credentials, audit logs | Not started |
 | 5 | Organizations, employer search, jobs, applications | Not started |
 | 6 | File security, rate limiting, hardening | Not started |
@@ -71,21 +71,36 @@ delivery, star ratings, and a general-purpose web scraper. See
 
 **What exists today:**
 
-* **20 endpoints** under `/api/v1` plus three health probes, with full OpenAPI.
+* **44 endpoints** under `/api/v1` plus three health probes, with full OpenAPI.
 * **Full authentication**: registration, login, refresh rotation with reuse
   detection, logout, password change/reset, email verification.
 * **Authorisation**: deny-by-default role gates, mass-assignment protection,
   resource-ownership helpers, administrator safety rails.
+* **Work Passport**: profile, trades, skills, preferred counties, work experience
+  and projects, under three separate privacy tiers. The public response schema has
+  no phone, contact-email or contact-name field at all, so a service bug cannot
+  leak one through an employer-facing endpoint.
+* **Derived experience** from dated records, with overlapping roles merged so
+  concurrent work is not double-counted. The self-declared figure is reported
+  alongside, never instead.
+* **Fixed-window rate limiting** with pluggable in-memory and Redis backends,
+  failing closed when the store is unreachable.
+* **Object storage and file inspection**: content-sniffed upload validation and a
+  `Storage` backend that refuses to sign a URL for a path-traversal key. No
+  upload endpoint is mounted yet.
+* **Seed data**: 47 counties, 20 trades, 64 skills, and development accounts.
+  Development-only; it refuses to run when `APP_ENV=production`.
 * **28-table schema** with 48 CHECK constraints, partial unique indexes, and a
   trigger making `audit_logs` append-only. `alembic check` reports zero drift.
 * **Structured logging** with request correlation and key-name redaction.
 * **Security headers**, an exact-origin CORS allowlist, body-size limits.
-* **380 tests** passing at **90.75%** application coverage.
+* **828 tests** passing at **93.8%** application coverage.
 * Ruff, MyPy (strict), Bandit, `pip-audit` and a secret scanner all clean.
 
-**What does not exist yet:** rate limiting, file uploads and object storage, the
-worker/employer/job domain endpoints, seed data, the CI pipeline and the Docker
-image. Phases 3-8. Nothing in this README describes them as working.
+**What does not exist yet:** the upload and download endpoints (the storage layer
+behind them exists, but no route is mounted), the employer/job domain, references
+and verification, credentials, the CI pipeline and the Docker image. Phases 4-8.
+Nothing in this README describes them as working.
 
 **Not implemented, and not faked:** no email is actually sent. No mail provider is
 configured, so `NullTokenDeliveryChannel` raises in production rather than silently
@@ -209,9 +224,23 @@ pg_dump "$DATABASE_URL" --format=custom --file=pre-downgrade.dump
 
 ### Seed data
 
-Not implemented yet — Phase 3. It will be **development-only** and will refuse to
-run when `APP_ENV=production`. Until then the trade, skill and county catalogues
-are empty, so the worker endpoints that depend on them land with seeding.
+Development-only, and it refuses to run when `APP_ENV=production`.
+
+```bash
+python -m app.db.seed                     # catalogues, accounts, passports, jobs
+python -m app.db.seed --catalogues-only   # reference data only
+python -m app.db.seed --skip-users        # reference data plus passports and jobs
+```
+
+It loads 47 counties, 20 trades and 64 skills, then a development dataset: an
+administrator, an employer, three workers with work experience, an organization
+and three jobs. Idempotent by natural key, so re-running updates descriptive fields
+without duplicating rows — and never resets `is_active`, which would undo an
+administrator's deactivation.
+
+Every seeded account uses the password `Fundipulse-Dev-Only-1`. Addresses are
+`admin@fundipulse.test`, `employer@fundipulse.test` and `worker1..3@fundipulse.test`.
+`force=True` does not bypass the production refusal.
 
 ### Running the API
 
@@ -342,18 +371,22 @@ What the design assumes and does **not** claim:
 
 Current, honest limitations:
 
-* **No HTTP endpoints yet.** `app/main.py` and the `api/` layer are not
-  implemented; this milestone delivers the data layer.
-* **No authentication yet.** `app/core/security.py` is not implemented, so there
-  are no tokens, no password hashing and no sessions.
-* **No test suite yet.** The 90% coverage gate is configured but nothing is
-  measured.
 * **No CI/CD or Docker yet.**
-* **Storage is not wired.** `files` is metadata-only; there is no object-storage
-  client, no upload endpoint and no signed URLs.
+* **Storage is not wired to a route.** `app/core/storage.py` and
+  `app/utils/fileinspect.py` exist and are tested, but no upload or download
+  endpoint is mounted, so nothing writes to S3 in this phase.
+* **Rate limiting is not wired to a route.** The limiter and its Redis backend are
+  built and tested; the `Depends(...)` binding for individual endpoints lands with
+  the auth hardening in Phase 6.
 * **No notification delivery.** `notification_events` is an outbox table with
   no dispatcher.
-* **Trade, skill and county catalogues are empty** until seeding lands.
+* **Verification is not implemented.** Experience and project responses carry a
+  `verification` field that is always `null`, and no endpoint can set one. That is
+  deliberate: a claim is not an attestation, and Phase 4 is where the third-party
+  attestation flow arrives.
+* **The Redis rate-limit backend is untested against a real server.** It is
+  exercised only through an injected fake client, so the Lua script has never run.
+  Smoke-test it before relying on it in production.
 
 ---
 

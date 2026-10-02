@@ -138,10 +138,24 @@ def get_current_session_id(request: Request) -> uuid.UUID | None:
 CurrentSessionId = Annotated[uuid.UUID | None, Depends(get_current_session_id)]
 
 
+def get_optional_bearer_token(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+) -> str | None:
+    """The bearer token, or ``None`` when no ``Authorization`` header was sent.
+
+    Separate from :func:`get_bearer_token` because FastAPI resolves every
+    sub-dependency before the dependant runs: reusing the raising version here
+    would 401 an anonymous request before the ``credentials is None`` branch could
+    be reached, which defeats the point of an optional dependency.
+    """
+    if credentials is None or not credentials.credentials:
+        return None
+    return credentials.credentials
+
+
 def get_optional_user(
     request: Request,
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
-    token: Annotated[str, Depends(get_bearer_token)],
+    token: Annotated[str | None, Depends(get_optional_bearer_token)],
     auth_service: AuthServiceDep,
 ) -> User | None:
     """Resolve the caller if a token is present, otherwise ``None``.
@@ -149,12 +163,11 @@ def get_optional_user(
     Used only by endpoints that serve genuinely public data with optional
     personalisation.
 
-    Note the two parameters: ``credentials`` distinguishes "no Authorization
-    header at all" (anonymous - return ``None``) from "a header was present but is
-    malformed" (raise). An invalid token is never silently ignored, because
-    treating it as anonymous would hide client bugs behind quietly different data.
+    An absent header yields ``None``; a header that is present but invalid raises,
+    because treating a broken token as anonymous would return quietly different
+    data to a client that believes it authenticated.
     """
-    if credentials is None:
+    if token is None:
         return None
     return get_current_user(request=request, token=token, auth_service=auth_service)
 

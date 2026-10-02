@@ -60,8 +60,8 @@ delivery, star ratings, and a general-purpose web scraper. See
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Repository inspection, architecture, data model, migrations | **Complete** |
-| 2 | Authentication, authorisation, users | Not started |
+| 1 | Repository inspection, architecture, data model, migrations | **Complete** (PR #1) |
+| 2 | Authentication, authorisation, users | **Complete** (PR #2) |
 | 3 | Worker profiles, trades, skills, projects, experiences | Not started |
 | 4 | References, verification, credentials, audit logs | Not started |
 | 5 | Organizations, employer search, jobs, applications | Not started |
@@ -69,25 +69,28 @@ delivery, star ratings, and a general-purpose web scraper. See
 | 7 | Full test suite, coverage, static analysis | Not started |
 | 8 | Docker, CI/CD, Render readiness | Not started |
 
-**What exists today (Phase 1):**
+**What exists today:**
 
-* A layered application skeleton with configuration, structured constants and
-  database access (`app/`).
-* A 28-table PostgreSQL data model covering identity, organizations, the work
-  passport, files and evidence, verification, jobs, applications, moderation
-  and audit.
-* A complete, reversible Alembic migration with **zero drift** against the ORM
-  models (`alembic check` reports no pending operations).
-* Database-level integrity: 47 CHECK constraints, foreign keys, partial unique
-  indexes for race-prone rules, and a trigger that makes `audit_logs`
-  append-only.
-* Configuration with production validation that refuses to boot on an unsafe
-  setup.
-* A pinned dependency lock, and Ruff / MyPy / Bandit configured and passing.
+* **20 endpoints** under `/api/v1` plus three health probes, with full OpenAPI.
+* **Full authentication**: registration, login, refresh rotation with reuse
+  detection, logout, password change/reset, email verification.
+* **Authorisation**: deny-by-default role gates, mass-assignment protection,
+  resource-ownership helpers, administrator safety rails.
+* **28-table schema** with 48 CHECK constraints, partial unique indexes, and a
+  trigger making `audit_logs` append-only. `alembic check` reports zero drift.
+* **Structured logging** with request correlation and key-name redaction.
+* **Security headers**, an exact-origin CORS allowlist, body-size limits.
+* **380 tests** passing at **90.75%** application coverage.
+* Ruff, MyPy (strict), Bandit, `pip-audit` and a secret scanner all clean.
 
-**What does not exist yet:** every HTTP endpoint, the auth service, the test
-suite, CI workflows and the Docker image. Those arrive in phases 2-8. Nothing in
-this README describes them as working.
+**What does not exist yet:** rate limiting, file uploads and object storage, the
+worker/employer/job domain endpoints, seed data, the CI pipeline and the Docker
+image. Phases 3-8. Nothing in this README describes them as working.
+
+**Not implemented, and not faked:** no email is actually sent. No mail provider is
+configured, so `NullTokenDeliveryChannel` raises in production rather than silently
+dropping password-reset mail — a silent no-op would leave users locked out while
+reporting success.
 
 ---
 
@@ -206,14 +209,9 @@ pg_dump "$DATABASE_URL" --format=custom --file=pre-downgrade.dump
 
 ### Seed data
 
-Seed data is **development-only** and is guarded so it cannot run in production
-(added in Phase 3):
-
-```bash
-python -m app.db.seed          # trades, skills, counties, sample users
-```
-
-It refuses to run when `APP_ENV=production`.
+Not implemented yet — Phase 3. It will be **development-only** and will refuse to
+run when `APP_ENV=production`. Until then the trade, skill and county catalogues
+are empty, so the worker endpoints that depend on them land with seeding.
 
 ### Running the API
 
@@ -225,27 +223,31 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1
 ```
 
-`app.main:app` is created in Phase 2. In Phase 1 there is no HTTP application
-yet.
+`app.main:app` is the application factory result.
 
 ---
 
 ## Running tests
 
 ```bash
-pytest                                  # full suite
+pytest                                  # 380 tests
 pytest -m unit                          # fast, no database
+pytest -m integration                   # service + database
+pytest -m api                           # HTTP surface
 pytest -m security                      # adversarial / regression tests
 pytest --cov=app --cov-report=term-missing
 ```
 
-The test database (`fundipulse_test`) is created and migrated automatically by
-`tests/conftest.py`; no manual setup and no shared state between runs.
+The test database (`fundipulse_test`) is created and **migrated by Alembic** at
+session start — the suite therefore proves the migrations work, using the same
+code path production uses. `create_all()` is never used. The suite refuses to run
+against a database whose name does not contain `test`.
 
-**Coverage gate:** ≥ 90% of application code, enforced in CI
-(`pyproject.toml → [tool.coverage.report] fail_under = 90`).
+Each test gets a fresh app instance and a session whose work is rolled back, so
+tests cannot leak state into one another.
 
-> The test suite arrives in Phase 7. It does not exist yet.
+**Coverage gate:** ≥ 90% of application code, enforced by `pytest` and by CI
+(`pyproject.toml → [tool.coverage.report] fail_under = 90`). Currently **90.75%**.
 
 ---
 
@@ -257,7 +259,7 @@ ruff format --check app tests alembic    # formatting
 ruff format app                          # apply formatting
 mypy app                                 # strict type checking
 bandit -r app -c pyproject.toml           # security lint (OWASP/CWE)
-pip-audit -r requirements/base.txt        # dependency vulnerabilities
+pip-audit --local --strict             # dependency vulnerabilities (audits the venv)
 detect-secrets scan --all-files           # secret scanning
 ```
 
@@ -284,19 +286,21 @@ not exposed.
 
 ## CI/CD
 
-See [.github/workflows](.github/workflows) — added in Phase 8.
+`.github/workflows/security.yml` exists now: secret scanning, Bandit and
+`pip-audit`. The full `ci.yml` (lint, type check, tests, coverage gate, build) is
+Phase 8.
 
-Intended pipeline: `checkout → install → lint → type check → unit → integration →
-coverage gate → security scans → build`. It runs on pull requests and pushes to
-`main`, and fails on any critical check. Production deployment is a controlled
-step, never an automatic deploy from an arbitrary branch.
+Branch strategy: **feature branches → PR → `dev`**. `main` is the stable trunk and
+is only promoted deliberately. PRs are never auto-merged.
+
+Deployment is never triggered by an arbitrary branch.
 
 ---
 
 ## Deployment
 
-Target platform is **Render**. `render.yaml` is added in Phase 8. The design
-assumptions:
+Target platform is **Render**. `render.yaml` and the full procedure are Phase 8.
+The design assumptions already enforced in code:
 
 * Managed PostgreSQL, reachable only over Render's private network.
 * Migrations run as a **pre-deploy command**, not at application start-up, so a
@@ -361,7 +365,8 @@ Current, honest limitations:
 | [docs/data-model.md](docs/data-model.md) | Entities, ERD, integrity rules, concurrency guarantees |
 | [docs/api-design.md](docs/api-design.md) | Response conventions, versioning, pagination, errors, idempotency |
 | [docs/security.md](docs/security.md) | Threat model and controls per OWASP category |
-| [docs/security-checklist.md](docs/security-checklist.md) | Pre-deployment review checklist |
+| [docs/security-checklist.md](docs/security-checklist.md) | Pre-deployment review checklist, itemised |
+| [docs/privacy.md](docs/privacy.md) | Data inventory, retention, deletion, legal open questions |
 | [docs/privacy.md](docs/privacy.md) | Data minimisation, retention, what is collected and why |
 | [docs/testing-strategy.md](docs/testing-strategy.md) | Test layers, fixtures, property testing, coverage policy |
 | [docs/deployment.md](docs/deployment.md) | Render deployment, migrations, smoke tests, rollback |

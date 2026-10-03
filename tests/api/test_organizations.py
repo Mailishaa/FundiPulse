@@ -27,12 +27,16 @@ pytestmark = [pytest.mark.api, pytest.mark.integration]
 
 @pytest.fixture(autouse=True)
 def _mount_organization_routes(app):
-    """Mount the organization routers for this module.
+    """Mount the organization routers for this module if they are not mounted yet.
 
-    ``app/api/router.py`` belongs to another agent, so the domain is mounted here
-    instead of there. The mount is conditional and disappears once the routers
-    are registered in the application: it checks the OpenAPI paths, because a
-    lazily included router is not visible on ``app.routes``.
+    The application registers domain routers in ``app/api/router.py``, which is
+    under active concurrent edit. Rather than fail with a wall of 404s while that
+    file is mid-flight, mount them here - and only when they are absent, so once
+    the application registers them this fixture does nothing and the tests below
+    exercise the real mount point.
+
+    A lazily included router is not visible on ``app.routes``, so the OpenAPI
+    paths are what the check reads.
     """
     if "/organizations" not in app.openapi()["paths"]:
         app.include_router(organizations_routes.router)

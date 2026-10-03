@@ -17,6 +17,7 @@ from fastapi import APIRouter
 from app.api.routes import (
     auth,
     catalogue,
+    contact,
     credentials,
     discovery,
     files,
@@ -59,6 +60,7 @@ api_router.include_router(verifications.router)
 api_router.include_router(reports.router)
 api_router.include_router(reports.admin_router)
 api_router.include_router(files.router)
+api_router.include_router(contact.router)
 
 # Shared surfaces.
 api_router.include_router(catalogue.router)

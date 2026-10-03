@@ -398,12 +398,47 @@ class TestUpload:
 # Upload: refusals                                                            #
 # --------------------------------------------------------------------------- #
 class TestUploadRefusals:
-    def test_oversized_is_rejected(self, client, worker, error_code):
-        """413 either way: the request cap or the per-file cap gets there first."""
-        response = upload_bytes(client, worker["headers"], data=PNG + b"\x00" * (300 * 1024))
+    def test_a_file_over_the_configured_limit_is_rejected(self, client, worker, error_code):
+        """Sized against the real setting, not a hard-coded number.
+
+        This used to send 300 KiB and pass only because the global JSON body cap
+        happened to be 256 KiB. The file was never actually oversized against
+        ``max_upload_size_bytes``, so the assertion proved nothing about the upload
+        limit - and it would have started failing the moment the request cap was
+        corrected for multipart.
+        """
+        from app.core.config import get_settings
+
+        limit = get_settings().max_upload_size_bytes
+        response = upload_bytes(client, worker["headers"], data=PNG + b"\x00" * (limit + 1024))
 
         assert response.status_code == 413
         assert error_code(response) in {"PAYLOAD_TOO_LARGE", "FILE_TOO_LARGE"}
+
+    def test_a_file_under_the_limit_is_accepted_even_above_the_json_cap(self, client, worker):
+        """The regression the request-cap fix exists to prevent.
+
+        The JSON body cap is 256 KiB and the upload limit is 10 MiB. A legitimate
+        1 MiB photo must be accepted; if the request cap still applied to the
+        upload route, the operator's configured limit would be unreachable.
+        """
+        from app.core.config import get_settings
+
+        limit = get_settings().max_upload_size_bytes
+        payload_size = 1024 * 1024
+        assert payload_size < limit, "precondition: 1 MiB is under the configured limit"
+
+        response = upload_bytes(client, worker["headers"], data=PNG + b"\x00" * payload_size)
+
+        assert response.status_code == 201, response.text
+
+    def test_the_json_body_cap_still_applies_to_non_upload_routes(self, client, worker):
+        """The upload exemption must not have widened anything else."""
+        response = client.post(
+            "/workers/me/profile", headers=worker["headers"], json={"bio": "x" * 300_000}
+        )
+
+        assert response.status_code == 413
 
     def test_wrong_extension_is_rejected(self, client, worker, error_code):
         """PNG bytes named ``.txt``: the extension allowlist has no ``.txt``."""

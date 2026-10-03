@@ -34,6 +34,7 @@ from app.db.models.mixins import SoftDeleteMixin
 from app.db.types import enum_column_type
 
 if TYPE_CHECKING:
+    from app.db.models.job import Job
     from app.db.models.organization import Organization
     from app.db.models.user import User
     from app.db.models.worker import WorkerProfile
@@ -80,7 +81,6 @@ class ContactRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin)
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     worker_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("worker_profiles.id", ondelete="CASCADE"), nullable=False
     )
@@ -122,6 +122,7 @@ class ContactRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin)
     organization: Mapped[Organization] = relationship(
         "Organization", foreign_keys=[organization_id]
     )
+    job: Mapped[Job | None] = relationship("Job", foreign_keys=[job_id])
 
     @property
     def is_pending(self) -> bool:

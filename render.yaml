@@ -1,0 +1,93 @@
+# Render blueprint for the FundiPulse API.
+#
+# Every value here is a *reference* to a Render setting or a sync:false
+# placeholder. No secret is committed: secrets are generated in the Render
+# dashboard, or injected from GitHub environment secrets via `sync: false`.
+
+services:
+  - type: web
+    name: fundipulse-api
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/ready
+
+    # Migrations run before the new version serves traffic, not at application
+    # start-up. A failed migration therefore never leaves two schema versions
+    # serving requests against one database.
+    preDeployCommand: alembic upgrade head
+
+    # Overridden by Render; present so a local `docker run` works unchanged.
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fundipulse-db
+          property: connectionString
+      # Shared counters, so scaling to several containers does not multiply the
+      # effective rate limit by the container count.
+      - key: RATE_LIMIT_BACKEND
+        value: redis
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fundipulse-cache
+          property: connectionString
+      # Secrets are never written here. Set them in the dashboard, or mark them
+      # `sync: false` and supply them from GitHub environment secrets.
+      - key: SECRET_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "14"
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://app.fundipulse.co   # comma-separated, not JSON
+      - key: ALLOWED_HOSTS
+        value: fundipulse-api.onrender.com
+      - key: ENABLE_DOCS
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      # Files go to object storage, never to the container filesystem: an
+      # ephemeral container loses anything it wrote to local disk.
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: STORAGE_BUCKET
+        sync: false
+      - key: STORAGE_REGION
+        value: af-south-1
+      - key: STORAGE_ACCESS_KEY
+        sync: false
+      - key: STORAGE_SECRET_KEY
+        sync: false
+      # Set for MinIO or an S3-compatible provider; leave unset for AWS.
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_USE_PATH_STYLE
+        value: "false"
+      # Off until a scanner is wired in. With it off, uploads land PENDING and are
+      # therefore not downloadable, which is the safe default.
+      - key: MALWARE_SCANNING_ENABLED
+        value: "false"
+
+  - type: postgres
+    name: fundipulse-db
+    plan: basic-256mb
+    region: frankfurt
+    postgresMajorVersion: "18"
+    ipAllowList: []          # private network only; Render refuses public access
+    databaseName: fundipulse
+
+  - type: redis
+    name: fundipulse-cache
+    plan: starter
+    region: frankfurt
+    ipAllowList: []
+    maxmemoryPolicy: noeviction   # evicting a rate-limit counter silently lifts a limit

@@ -1,24 +1,29 @@
-# Render blueprint for the FundiPulse API.
+# Render blueprint for the FundiPulse API — **free tier only**.
 #
-# Every value here is a *reference* to a Render setting or a sync:false
-# placeholder. No secret is committed: secrets are generated in the Render
-# dashboard, or injected from GitHub environment secrets via `sync: false`.
+# Every compute plan below is `free`. Nothing here costs money, and nothing here
+# needs a payment method: Render only bills once you exceed an included allowance,
+# and a workspace with no payment method is suspended rather than charged.
+#
+# No secret is committed. `SECRET_KEY` and `JWT_SECRET` use `generateValue: true`,
+# so Render mints a distinct base64-encoded 256-bit value for each and keeps it in
+# the dashboard. That is better than `sync: false`: there is no prompt to miss and
+# no risk of the two being set to the same string, which the app refuses at boot.
 
 services:
   - type: web
     name: fundipulse-api
     runtime: docker
-    plan: starter
+    plan: free            # 0.1 CPU / 512 MB RAM
     region: frankfurt
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health/ready
 
     # Migrations run before the new version serves traffic, not at application
-    # start-up. A failed migration therefore never leaves two schema versions
-    # serving requests against one database.
+    # start-up. A failed migration would otherwise leave one container running new
+    # code against an old schema while another runs old code against the same
+    # database.
     preDeployCommand: alembic upgrade head
 
-    # Overridden by Render; present so a local `docker run` works unchanged.
     envVars:
       - key: APP_ENV
         value: production
@@ -28,66 +33,63 @@ services:
         fromDatabase:
           name: fundipulse-db
           property: connectionString
-      # Shared counters, so scaling to several containers does not multiply the
-      # effective rate limit by the container count.
-      - key: RATE_LIMIT_BACKEND
-        value: redis
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: fundipulse-cache
-          property: connectionString
-      # Secrets are never written here. Set them in the dashboard, or mark them
-      # `sync: false` and supply them from GitHub environment secrets.
+
+      # Minted by Render. Distinct by construction, and never in git.
       - key: SECRET_KEY
-        sync: false
+        generateValue: true
       - key: JWT_SECRET
-        sync: false
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        value: "30"
-      - key: REFRESH_TOKEN_EXPIRE_DAYS
-        value: "14"
+        generateValue: true
+
+      # The app refuses to boot in production without at least one origin, so this
+      # cannot be left empty. Add your PWA origin(s), comma-separated — not JSON.
       - key: CORS_ALLOWED_ORIGINS
-        value: https://app.fundipulse.co   # comma-separated, not JSON
-      - key: ALLOWED_HOSTS
-        value: fundipulse-api.onrender.com
+        value: https://fundipulse.onrender.com
+
+      # Swagger is force-disabled in production regardless of this value.
       - key: ENABLE_DOCS
         value: "false"
       - key: LOG_LEVEL
         value: INFO
-      # Files go to object storage, never to the container filesystem: an
-      # ephemeral container loses anything it wrote to local disk.
-      - key: STORAGE_BACKEND
-        value: s3
-      - key: STORAGE_BUCKET
-        sync: false
-      - key: STORAGE_REGION
-        value: af-south-1
-      - key: STORAGE_ACCESS_KEY
-        sync: false
-      - key: STORAGE_SECRET_KEY
-        sync: false
-      # Set for MinIO or an S3-compatible provider; leave unset for AWS.
-      - key: STORAGE_ENDPOINT
-        sync: false
-      - key: STORAGE_USE_PATH_STYLE
-        value: "false"
-      # Off until a scanner is wired in. With it off, uploads land PENDING and are
-      # therefore not downloadable, which is the safe default.
-      - key: MALWARE_SCANNING_ENABLED
-        value: "false"
 
-  - type: postgres
-    name: fundipulse-db
-    plan: basic-256mb
+      # Shared counters. Without this the in-process store is used and the
+      # effective limit is multiplied by the container count.
+      - key: RATE_LIMIT_BACKEND
+        value: redis
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: fundipulse-cache
+          property: connectionString
+
+      # Files go to object storage, never to the container filesystem: a free
+      # instance has no persistent disk and loses local writes on every spin-down.
+      # Left `memory` here because that backend is *refused* in production, so it
+      # must be set to `s3` plus credentials before the first deploy that uses
+      # /files/upload. See docs/deployment.md.
+      - key: STORAGE_BACKEND
+        value: memory
+
+  - type: keyvalue
+    name: fundipulse-cache
+    plan: free            # 25 MB RAM
+    region: frankfurt
+    # noeviction: Redis with an eviction policy silently discards a counter, which
+    # *raises* the effective rate limit for that identity instead of lowering it.
+    # Running out of memory should fail the limit, not lift it.
+    maxmemoryPolicy: noeviction
+    # Free instances do not persist to disk, so this is the only option available.
+    persistenceMode: "off"   # quoted: YAML 1.1 reads bare off as boolean false
+    # Required for Key Value. Empty means private-network only, so the 25 MB
+    # instance is not exposed to the public internet.
+    ipAllowList: []
+
+databases:
+  # NOTE: Render Postgres databases live under `databases:`, not `services:`.
+  - name: fundipulse-db
+    plan: free            # 0.1 CPU / 256 MB RAM / 1 GB
     region: frankfurt
     postgresMajorVersion: "18"
-    ipAllowList: []          # private network only; Render refuses public access
     databaseName: fundipulse
-
-  - type: redis
-    name: fundipulse-cache
-    plan: starter
-    region: frankfurt
+    # Private network only. A free web service cannot *receive* private traffic
+    # but can *send* to a datastore in the same region, so this works.
     ipAllowList: []
-    maxmemoryPolicy: noeviction   # evicting a rate-limit counter silently lifts a limit

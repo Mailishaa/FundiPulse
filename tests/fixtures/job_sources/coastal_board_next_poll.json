@@ -1,0 +1,68 @@
+{
+  "_comment": "Second poll of the same aggregator, eleven days later. Same shape, different content: CB-4411 has been retitled and its deadline extended, CB-4412 and CB-4414 are byte-identical to the first poll, CB-4415 has vanished from the feed without saying so, and CB-4416 now states it has closed. Covers retitle-is-the-same-job, DEADLINE_CHANGED, JOB_UPDATED, JOB_CLOSED and JOB_REMOVED in one pass.",
+  "source": "coastal-board",
+  "generated_at": "2026-09-12T06:00:00Z",
+  "page": { "number": 1, "total": 1, "has_more": false },
+  "results": [
+    {
+      "id": "CB-4411",
+      "headline": "Experienced Mason (Blockwork) - Housing Estate",
+      "body_html": "<p>Headline changed after the client renamed the estate. Same vacancy, same reference: the workers who applied last week are looking at this one.</p>",
+      "town": "Mombasa",
+      "employer": { "name": "Mombasa Homes Ltd" },
+      "contract_type": "Full Time",
+      "seniority": "Experienced",
+      "years_required": "5+",
+      "pay": { "min": 45000, "max": 60000, "currency": "KSh", "period": "monthly" },
+      "listed_at": "2026-08-28T09:15:00Z",
+      "applications_close": "45 days",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-4411",
+      "apply_url": "https://jobs.example.com/listing/cb-4411/apply"
+    },
+    {
+      "id": "CB-4412",
+      "headline": "Plumber - Immediate Start",
+      "body_html": "<p>Qualified plumber needed for a hotel refurbishment in Kisauni. Hot and cold water, drainage and sanitary fit-off. Minimum three years on commercial fit-outs.</p>",
+      "town": "Kisauni",
+      "employer": { "name": "Coastal Plumbing Co" },
+      "contract_type": "Contract",
+      "seniority": "Intermediate",
+      "years_required": "3 to 5",
+      "pay_text": "KSh 1,200 per day",
+      "listed_at": 1755000000,
+      "applications_close": "3 days",
+      "state": "accepting applications",
+      "web_url": "https://jobs.example.com/listing/cb-4412",
+      "apply_url": "https://apply.partner-ats.example.com/jobs/4412"
+    },
+    {
+      "id": "CB-4414",
+      "headline": "Experienced Mason Needed for Residential Development",
+      "body_html": "<p>Head office needs a mason for a warehouse conversion in Nyali. Different employer, different site, identical headline. Nothing about the title distinguishes these two vacancies.</p>",
+      "town": "Nyali",
+      "employer": { "name": "Nyali Contractors" },
+      "contract_type": "Full Time",
+      "seniority": "Entry",
+      "pay_text": "Negotiable",
+      "listed_at": "2026-08-30",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-4414"
+    },
+    {
+      "id": "CB-4416",
+      "headline": "Electrician - Site Maintenance",
+      "body_html": "<p>Site electrician for routine maintenance across three depots. Vacancy has been filled; applications are no longer accepted.</p>",
+      "town": "Nakuru",
+      "employer": { "name": "Rift Valley Depot Services" },
+      "contract_type": "Full-time",
+      "seniority": "Mid",
+      "years_required": "2+ years",
+      "pay_text": "USD 900 per month",
+      "listed_at": "2026-08-20T11:30:00Z",
+      "closing_in_days": 10,
+      "state": "closed",
+      "web_url": "https://jobs.example.com/listing/cb-4416"
+    }
+  ]
+}

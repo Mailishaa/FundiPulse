@@ -15,6 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes import (
+    applications,
     auth,
     catalogue,
     contact,
@@ -54,6 +55,7 @@ api_router.include_router(credentials.router)
 api_router.include_router(organizations.router)
 api_router.include_router(organizations.admin_router)
 api_router.include_router(jobs.router)
+api_router.include_router(applications.router)
 
 # Trust and moderation.
 api_router.include_router(verifications.router)

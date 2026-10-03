@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
@@ -150,8 +150,8 @@ def _page(page: int, page_size: int, total: int, request_id: str | None) -> Pagi
         "One application per worker per job is enforced by a database unique "
         "constraint rather than a pre-check, because two taps of the button on a poor "
         "connection both pass a pre-check. The loser gets a 409. Send an "
-        "`idempotency_key` to make a retry safe: the same key returns the application "
-        "created the first time.\n\n"
+        "`idempotency_key` to make a retry safe: the same key returns 200 with the "
+        "application created the first time, because nothing was created.\n\n"
         "Only an `OPEN` platform listing accepts applications. A `DRAFT` is a 404 - "
         "an unpublished listing is not something a worker may know exists - and a "
         "closed, cancelled or expired one is a 409 that names the reason."
@@ -170,11 +170,18 @@ def _page(page: int, page_size: int, total: int, request_id: str | None) -> Pagi
 def apply_to_job(
     job_id: uuid.UUID,
     payload: ApplicationCreateRequest,
+    response: Response,
     session: DbSession,
     actor: RequireWorker,
     ctx: Ctx,
 ) -> ResponseEnvelope[ApplicationResponse]:
-    application = _service(session).apply(actor=actor, job_id=job_id, payload=payload, context=ctx)
+    application, replayed = _service(session).apply(
+        actor=actor, job_id=job_id, payload=payload, context=ctx
+    )
+    if replayed:
+        # A retry returned the row the first attempt created, so nothing was created
+        # and 200 is the honest answer rather than a second 201.
+        response.status_code = status.HTTP_200_OK
     return ResponseEnvelope(
         data=to_application_response(application),
         meta=Meta(request_id=ctx.request_id),

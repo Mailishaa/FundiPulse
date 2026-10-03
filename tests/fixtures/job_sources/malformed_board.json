@@ -1,0 +1,85 @@
+{
+  "_comment": "A feed that has started returning rubbish. Every entry here is rejected or coerced, and none of them may produce a job row. The final entry is valid, so it also proves one bad record does not cost the rest of the poll.",
+  "source": "coastal-board",
+  "generated_at": "2026-09-13T06:00:00Z",
+  "page": { "number": 1, "total": 1, "has_more": false },
+  "results": [
+    {
+      "id": "",
+      "headline": "Welder - Structural Steel",
+      "body_html": "<p>No identifier at all, so there is nothing to deduplicate against next poll.</p>",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/anon"
+    },
+    {
+      "id": "CB-9001",
+      "headline": "   ",
+      "body_html": "<p>Blank headline.</p>",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-9001"
+    },
+    {
+      "id": "CB-9002",
+      "headline": "Quantity Surveyor - Infrastructure Projects - Graduate - Immediate - Long Term - Mombasa - Nairobi - Kisumu - Nakuru - Eldoret - Thika - Malindi - Watamu - Diani - Ukunda - Kilifi - Lamu - Garissa - Wajir - Mandera - Marsabit - Isiolo - Nyeri - Murang'a - Kirinyaga - Embu - Machakos - Makueni - Kitui - Taita Taveta - Kilifi South",
+      "body_html": "<p>A headline far longer than the VARCHAR(255) the platform stores, which is how an over-long title gets refused rather than silently cut.</p>",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-9002"
+    },
+    {
+      "id": "CB-9003",
+      "headline": "Carpenter - Woodwork",
+      "body_html": "<p>Points at a host nobody reviewed.</p>",
+      "state": "open",
+      "web_url": "https://unreviewed-attacker.example.net/jobs/9003"
+    },
+    {
+      "id": "CB-9004",
+      "headline": "Painter and Decorator",
+      "body_html": "<p>Plain HTTP, which the guard refuses everywhere.</p>",
+      "state": "open",
+      "web_url": "http://jobs.example.com/listing/cb-9004"
+    },
+    {
+      "id": "CB-9005",
+      "headline": "Tiler",
+      "body_html": "<p>No detail URL at all, so the listing could not be traced back to the site that published it.</p>",
+      "state": "open"
+    },
+    {
+      "id": "CB-9006",
+      "headline": "Steelworker",
+      "body_html": "<p>Location longer than the column that stores it.</p>",
+      "town": "Plot 44 Block C Industrial Area Behind The Old Grain Store Opposite The District Public Works Depot Along The Main Mombasa Nairobi Highway, then on through Mombasa, Nairobi, Kisumu, Nakuru, Eldoret, Thika, Malindi, Watamu, Diani, Ukunda, Kilifi, Lamu, Garissa, Wajir, Mandera, Marsabit, Isiolo, Nyeri, Muranga, Kirinyaga, Embu, Machakos, Makueni, Kitui and Taita Taveta",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-9006"
+    },
+    {
+      "id": "CB-9007",
+      "headline": "Plant Operator - Excavator",
+      "body_html": "<p>Vocabulary this platform does not recognise, and a date it cannot read. The listing is still ingested; the unknowns become defaults and warning codes.</p>",
+      "town": "Eldoret",
+      "contract_type": "Weekend",
+      "seniority": "Wizard",
+      "years_required": "lots",
+      "pay_text": "Ask us",
+      "listed_at": "sometime last Tuesday",
+      "closing_at": "when the job is done",
+      "state": "weird-new-status-the-feed-invented",
+      "web_url": "https://jobs.example.com/listing/cb-9007",
+      "apply_url": "https://collect-resumes.example.co/cb-9007"
+    },
+    {
+      "id": "CB-9008",
+      "headline": "Asbestos Handler",
+      "body_html": "<p>Valid entry after seven invalid ones. It must still be ingested, which is the point of counting rejections rather than aborting the poll.</p>",
+      "town": "Thika",
+      "contract_type": "Contract",
+      "seniority": "Intermediate",
+      "years_required": "3",
+      "pay": { "min": 70000, "max": 70000, "currency": "KES", "period": "per month" },
+      "listed_at": "2026-09-01T05:00:00Z",
+      "state": "open",
+      "web_url": "https://jobs.example.com/listing/cb-9008"
+    }
+  ]
+}

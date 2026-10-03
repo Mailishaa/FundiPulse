@@ -26,7 +26,7 @@ def _register(client, **overrides) -> dict:
         "accepted_terms": True,
     }
     payload.update(overrides)
-    response = client.post("/api/v1/auth/register", json=payload)
+    response = client.post("/auth/register", json=payload)
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -59,7 +59,7 @@ class TestRegistration:
         _register(client, email=address)
 
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": address,
                 "password": VALID_PASSWORD,
@@ -77,7 +77,7 @@ class TestRegistration:
         _register(client, email=address)
 
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": address.upper(),
                 "password": VALID_PASSWORD,
@@ -95,7 +95,7 @@ class TestRegistration:
     )
     def test_rejects_a_weak_password(self, client, password) -> None:
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": f"weak-{uuid.uuid4().hex[:10]}@example.com",
                 "password": password,
@@ -112,7 +112,7 @@ class TestRegistration:
     def test_refuses_self_registration_as_admin(self, client, error_code) -> None:
         """A client must not be able to mint itself an administrator."""
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": f"sneaky-{uuid.uuid4().hex[:10]}@example.com",
                 "password": VALID_PASSWORD,
@@ -128,7 +128,7 @@ class TestRegistration:
     def test_mass_assignment_via_role_is_rejected(self, client) -> None:
         """OWASP A01: an unexpected privilege field must not be silently ignored."""
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": f"mass-{uuid.uuid4().hex[:10]}@example.com",
                 "password": VALID_PASSWORD,
@@ -147,7 +147,7 @@ class TestRegistration:
 
     def test_requires_terms_acceptance(self, client) -> None:
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": f"terms-{uuid.uuid4().hex[:10]}@example.com",
                 "password": VALID_PASSWORD,
@@ -160,7 +160,7 @@ class TestRegistration:
 
     def test_rejects_a_malformed_email(self, client) -> None:
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": "not-an-email",
                 "password": VALID_PASSWORD,
@@ -179,7 +179,7 @@ class TestLogin:
     def test_returns_a_token_pair_for_valid_credentials(self, client, make_user) -> None:
         user = make_user(email=f"login-{uuid.uuid4().hex[:10]}@example.com")
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         assert response.status_code == 200
@@ -188,7 +188,7 @@ class TestLogin:
     def test_login_is_case_insensitive_on_the_address(self, client, make_user) -> None:
         user = make_user(email=f"case-{uuid.uuid4().hex[:10]}@example.com")
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email.upper(), "password": VALID_PASSWORD},
         )
         assert response.status_code == 200
@@ -196,7 +196,7 @@ class TestLogin:
     def test_wrong_password_is_rejected(self, client, make_user, error_code) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": OTHER_PASSWORD},
         )
         assert response.status_code == 401
@@ -208,11 +208,11 @@ class TestLogin:
         """OWASP A07: the two failures must be indistinguishable."""
         existing = make_user()
         wrong_password = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": existing.email, "password": OTHER_PASSWORD},
         )
         unknown_account = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={
                 "email": f"ghost-{uuid.uuid4().hex[:10]}@example.com",
                 "password": OTHER_PASSWORD,
@@ -226,13 +226,13 @@ class TestLogin:
         )
 
     def test_missing_password_is_a_422_not_a_401(self, client) -> None:
-        response = client.post("/api/v1/auth/login", json={"email": "a@b.test"})
+        response = client.post("/auth/login", json={"email": "a@b.test"})
         assert response.status_code == 422
 
     def test_inactive_account_cannot_log_in(self, client, make_user, error_code) -> None:
         user = make_user(is_active=False)
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         assert response.status_code == 403
@@ -249,7 +249,7 @@ class TestLogin:
         user.status = "DEACTIVATED"
 
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         assert response.status_code == 403
@@ -263,13 +263,13 @@ class TestLogin:
 
         for _ in range(settings.max_failed_login_attempts):
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": user.email, "password": OTHER_PASSWORD},
             )
 
         # The correct password now fails too, because the account is locked.
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         assert response.status_code == 423
@@ -277,9 +277,9 @@ class TestLogin:
 
     def test_a_successful_login_resets_the_failure_counter(self, client, make_user) -> None:
         user = make_user()
-        client.post("/api/v1/auth/login", json={"email": user.email, "password": OTHER_PASSWORD})
-        client.post("/api/v1/auth/login", json={"email": user.email, "password": OTHER_PASSWORD})
-        client.post("/api/v1/auth/login", json={"email": user.email, "password": VALID_PASSWORD})
+        client.post("/auth/login", json={"email": user.email, "password": OTHER_PASSWORD})
+        client.post("/auth/login", json={"email": user.email, "password": OTHER_PASSWORD})
+        client.post("/auth/login", json={"email": user.email, "password": VALID_PASSWORD})
         assert user.failed_login_count == 0
 
 
@@ -289,12 +289,12 @@ class TestLogin:
 class TestAuthenticatedEndpoints:
     def test_me_returns_the_callers_account(self, client, make_user, auth_headers) -> None:
         user = make_user()
-        response = client.get("/api/v1/auth/me", headers=auth_headers(user))
+        response = client.get("/auth/me", headers=auth_headers(user))
         assert response.status_code == 200
         assert response.json()["data"]["id"] == str(user.id)
 
     def test_me_requires_a_token(self, client, error_code) -> None:
-        response = client.get("/api/v1/auth/me")
+        response = client.get("/auth/me")
         assert response.status_code == 401
         assert error_code(response) == "AUTHENTICATION_REQUIRED"
 
@@ -308,7 +308,7 @@ class TestAuthenticatedEndpoints:
         ],
     )
     def test_rejects_malformed_authorization(self, client, header, error_code) -> None:
-        response = client.get("/api/v1/auth/me", headers=header)
+        response = client.get("/auth/me", headers=header)
         assert response.status_code == 401
         assert error_code(response) in {"AUTHENTICATION_REQUIRED", "INVALID_TOKEN"}
 
@@ -331,9 +331,7 @@ class TestAuthenticatedEndpoints:
         )()
         forged = foreign.create_access_token(subject=make_user().id, role="ADMIN")
 
-        response = client.get(
-            "/api/v1/auth/me", headers={"Authorization": f"Bearer {forged.token}"}
-        )
+        response = client.get("/auth/me", headers={"Authorization": f"Bearer {forged.token}"})
         assert response.status_code == 401
 
     def test_a_suspended_user_loses_access_immediately(
@@ -342,12 +340,12 @@ class TestAuthenticatedEndpoints:
         """A valid JWT must not outlive the account state it was issued under."""
         user = make_user()
         headers = auth_headers(user)
-        assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+        assert client.get("/auth/me", headers=headers).status_code == 200
 
         user.is_active = False
         user.status = "SUSPENDED"
 
-        response = client.get("/api/v1/auth/me", headers=headers)
+        response = client.get("/auth/me", headers=headers)
         assert response.status_code == 403
 
 
@@ -358,7 +356,7 @@ class TestTokenRotation:
     def _login(self, client, make_user) -> tuple[object, dict]:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         assert response.status_code == 200
@@ -366,9 +364,7 @@ class TestTokenRotation:
 
     def test_refresh_returns_a_new_pair(self, client, make_user) -> None:
         _, tokens = self._login(client, make_user)
-        response = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-        )
+        response = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
         assert response.status_code == 200
         new_tokens = response.json()["data"]
         assert new_tokens["access_token"] != tokens["access_token"]
@@ -377,11 +373,11 @@ class TestTokenRotation:
     def test_the_new_access_token_works(self, client, make_user) -> None:
         _, tokens = self._login(client, make_user)
         refreshed = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
         ).json()["data"]
 
         response = client.get(
-            "/api/v1/auth/me",
+            "/auth/me",
             headers={"Authorization": f"Bearer {refreshed['access_token']}"},
         )
         assert response.status_code == 200
@@ -398,21 +394,17 @@ class TestTokenRotation:
 
         # Legitimate rotation.
         rotated = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
         ).json()["data"]
 
         # Attacker replays the now-replaced token.
-        replay = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-        )
+        replay = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
         assert replay.status_code == 401
         assert error_code(replay) == "INVALID_TOKEN"
 
         # The legitimate holder is signed out too, because one of them is the
         # attacker. This is intentional.
-        after = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": rotated["refresh_token"]}
-        )
+        after = client.post("/auth/refresh", json={"refresh_token": rotated["refresh_token"]})
         assert after.status_code == 401
 
         live = (
@@ -433,8 +425,8 @@ class TestTokenRotation:
         from app.db.models.audit import AuditLog
 
         user, tokens = self._login(client, make_user)
-        client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
-        client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+        client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+        client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
 
         rows = (
             db_session.execute(
@@ -451,7 +443,7 @@ class TestTokenRotation:
         assert rows[-1].outcome == "DENIED"
 
     def test_an_unknown_refresh_token_is_rejected(self, client, error_code) -> None:
-        response = client.post("/api/v1/auth/refresh", json={"refresh_token": "x" * 40})
+        response = client.post("/auth/refresh", json={"refresh_token": "x" * 40})
         assert response.status_code == 401
         assert error_code(response) == "INVALID_TOKEN"
 
@@ -480,7 +472,7 @@ class TestLogout:
         from app.db.models.user import RefreshSession
 
         user = make_user()
-        response = client.post("/api/v1/auth/logout", headers=auth_headers(user))
+        response = client.post("/auth/logout", headers=auth_headers(user))
         assert response.status_code == 200
         assert response.json()["data"]["sessions_revoked"] == 1
 
@@ -503,12 +495,12 @@ class TestLogout:
         user = make_user()
         for _ in range(3):
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": user.email, "password": VALID_PASSWORD},
             )
 
         response = client.post(
-            "/api/v1/auth/logout",
+            "/auth/logout",
             headers={"Authorization": _login_header(client, user)},
             json={"all_sessions": True},
         )
@@ -529,24 +521,22 @@ class TestLogout:
     def test_the_refresh_token_stops_working_after_logout(self, client, make_user) -> None:
         user = make_user()
         tokens = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         ).json()["data"]["tokens"]
 
         client.post(
-            "/api/v1/auth/logout",
+            "/auth/logout",
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
 
-        response = client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
-        )
+        response = client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
         assert response.status_code == 401
 
 
 def _login_header(client, user) -> str:
     response = client.post(
-        "/api/v1/auth/login",
+        "/auth/login",
         json={"email": user.email, "password": VALID_PASSWORD},
     )
     return f"Bearer {response.json()['data']['tokens']['access_token']}"
@@ -559,7 +549,7 @@ class TestPasswordChange:
     def test_changes_the_password(self, client, make_user, auth_headers) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/change-password",
+            "/auth/change-password",
             headers=auth_headers(user),
             json={"current_password": VALID_PASSWORD, "new_password": OTHER_PASSWORD},
         )
@@ -569,7 +559,7 @@ class TestPasswordChange:
         # The new password works.
         assert (
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": user.email, "password": OTHER_PASSWORD},
             ).status_code
             == 200
@@ -580,7 +570,7 @@ class TestPasswordChange:
     ) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/change-password",
+            "/auth/change-password",
             headers=auth_headers(user),
             json={"current_password": OTHER_PASSWORD, "new_password": "Yet-Another-3-Key"},
         )
@@ -590,7 +580,7 @@ class TestPasswordChange:
     def test_rejects_reusing_the_current_password(self, client, make_user, auth_headers) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/change-password",
+            "/auth/change-password",
             headers=auth_headers(user),
             json={"current_password": VALID_PASSWORD, "new_password": VALID_PASSWORD},
         )
@@ -599,7 +589,7 @@ class TestPasswordChange:
     def test_enforces_the_password_policy(self, client, make_user, auth_headers) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/change-password",
+            "/auth/change-password",
             headers=auth_headers(user),
             json={"current_password": VALID_PASSWORD, "new_password": "weak"},
         )
@@ -616,12 +606,12 @@ class TestPasswordChange:
         user = make_user()
         for _ in range(2):
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": user.email, "password": VALID_PASSWORD},
             )
 
         client.post(
-            "/api/v1/auth/change-password",
+            "/auth/change-password",
             headers={"Authorization": _login_header(client, user)},
             json={"current_password": VALID_PASSWORD, "new_password": OTHER_PASSWORD},
         )
@@ -642,9 +632,9 @@ class TestPasswordReset:
     def test_unknown_address_gets_the_same_answer_as_a_known_one(self, client, make_user) -> None:
         """OWASP A07: no account enumeration through the reset endpoint."""
         known = make_user()
-        known_response = client.post("/api/v1/auth/forgot-password", json={"email": known.email})
+        known_response = client.post("/auth/forgot-password", json={"email": known.email})
         unknown_response = client.post(
-            "/api/v1/auth/forgot-password",
+            "/auth/forgot-password",
             json={"email": f"nobody-{uuid.uuid4().hex[:10]}@example.com"},
         )
 
@@ -671,14 +661,14 @@ class TestPasswordReset:
         assert token
 
         response = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": token, "new_password": OTHER_PASSWORD},
         )
         assert response.status_code == 200
 
         assert (
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": user.email, "password": OTHER_PASSWORD},
             ).status_code
             == 200
@@ -697,13 +687,13 @@ class TestPasswordReset:
         token = AuthService(db_session).request_password_reset(email=user.email)
 
         first = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": token, "new_password": OTHER_PASSWORD},
         )
         assert first.status_code == 200
 
         replay = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": token, "new_password": "Third-Password-4-Now"},
         )
         assert replay.status_code == 401
@@ -721,7 +711,7 @@ class TestPasswordReset:
         assert first_token != second_token
 
         stale = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": first_token, "new_password": OTHER_PASSWORD},
         )
         assert stale.status_code == 401
@@ -744,13 +734,13 @@ class TestPasswordReset:
 
         # The stale token is already consumed, so using it is a replay.
         replay = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": used_token, "new_password": OTHER_PASSWORD},
         )
         assert replay.status_code == 401
 
         after = client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": latest_token, "new_password": OTHER_PASSWORD},
         )
         assert after.status_code == 401, "outstanding tokens must be revoked on replay"
@@ -764,7 +754,7 @@ class TestPasswordReset:
         user = make_user(is_email_verified=False)
         token = AuthService(db_session).request_password_reset(email=user.email)
 
-        response = client.post("/api/v1/auth/verify-email", json={"token": token})
+        response = client.post("/auth/verify-email", json={"token": token})
         assert response.status_code == 401
         assert error_code(response) == "INVALID_TOKEN"
 
@@ -776,12 +766,12 @@ class TestPasswordReset:
 
         user = make_user()
         client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": VALID_PASSWORD},
         )
         token = AuthService(db_session).request_password_reset(email=user.email)
         client.post(
-            "/api/v1/auth/reset-password",
+            "/auth/reset-password",
             json={"token": token, "new_password": OTHER_PASSWORD},
         )
 
@@ -811,7 +801,7 @@ class TestEmailVerification:
         )
         assert user.is_email_verified is False
 
-        response = client.post("/api/v1/auth/verify-email", json={"token": verification_token})
+        response = client.post("/auth/verify-email", json={"token": verification_token})
         assert response.status_code == 200
         assert response.json()["data"]["is_email_verified"] is True
 
@@ -823,9 +813,9 @@ class TestEmailVerification:
             password=VALID_PASSWORD,
             role="WORKER",
         )
-        assert client.post("/api/v1/auth/verify-email", json={"token": token}).status_code == 200
+        assert client.post("/auth/verify-email", json={"token": token}).status_code == 200
 
-        replay = client.post("/api/v1/auth/verify-email", json={"token": token})
+        replay = client.post("/auth/verify-email", json={"token": token})
         assert replay.status_code == 401
         assert error_code(replay) == "INVALID_TOKEN"
 
@@ -836,6 +826,6 @@ class TestEmailVerification:
 
         user = make_user()
         reset_token = AuthService(db_session).request_password_reset(email=user.email)
-        response = client.post("/api/v1/auth/verify-email", json={"token": reset_token})
+        response = client.post("/auth/verify-email", json={"token": reset_token})
         assert response.status_code == 401
         assert error_code(response) == "INVALID_TOKEN"

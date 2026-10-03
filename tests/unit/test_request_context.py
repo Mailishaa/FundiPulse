@@ -61,7 +61,7 @@ class TestClientIpResolution:
         """On Render the socket address is always the load balancer."""
         user = make_user()
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": "Wrong-Password-9-X"},
             headers={"X-Forwarded-For": "203.0.113.42, 70.41.3.18"},
         )
@@ -70,7 +70,7 @@ class TestClientIpResolution:
     def test_a_hostile_forwarded_header_does_not_break_login(self, client, make_user) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": "Wrong-Password-9-X"},
             headers={"X-Forwarded-For": "'; DROP TABLE users; --"},
         )
@@ -83,7 +83,7 @@ class TestClientIpResolution:
 
         user = make_user()
         client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": "Wrong-Password-9-X"},
             headers={"X-Forwarded-For": "198.51.100.7"},
         )

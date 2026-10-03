@@ -62,16 +62,20 @@ delivery, star ratings, and a general-purpose web scraper. See
 | --- | --- | --- |
 | 1 | Repository inspection, architecture, data model, migrations | **Complete** (PR #1) |
 | 2 | Authentication, authorisation, users | **Complete** (PR #2) |
-| 3 | Worker profiles, trades, skills, projects, experiences | **Complete** (PR #3) |
-| 4 | References, verification, credentials, audit logs | Not started |
-| 5 | Organizations, employer search, jobs, applications | Not started |
-| 6 | File security, rate limiting, hardening | Not started |
-| 7 | Full test suite, coverage, static analysis | Not started |
-| 8 | Docker, CI/CD, Render readiness | Not started |
+| 3 | Work Passport, catalogues, seed data | **Complete** (PR #3) |
+| 4 | API prefix removal, organizations, discovery, verification, trust layer, files, reports, notifications | **Complete** (PR #4) |
+| 5 | Applications, contact requests, external job sources | **In progress** (PR #4) |
+| 6 | Rate limiting wired per endpoint, mail provider, malware scanner | Not started |
+| 7 | Docker, CI/CD, Render readiness | **Written, not yet running in CI** |
+| 8 | Full marketplace rollout behind a mobile PWA | Not started |
+
+**API paths are unprefixed.** `/auth/login`, not `/api/v1/auth/login`. There is no
+version segment; the routes match the product vocabulary. See
+[docs/decisions/](docs/decisions/) for the reasoning.
 
 **What exists today:**
 
-* **44 endpoints** under `/api/v1` plus three health probes, with full OpenAPI.
+* **94 endpoints** plus three health probes, with full OpenAPI. Zero paths under `/api`.
 * **Full authentication**: registration, login, refresh rotation with reuse
   detection, logout, password change/reset, email verification.
 * **Authorisation**: deny-by-default role gates, mass-assignment protection,
@@ -85,17 +89,33 @@ delivery, star ratings, and a general-purpose web scraper. See
   alongside, never instead.
 * **Fixed-window rate limiting** with pluggable in-memory and Redis backends,
   failing closed when the store is unreachable.
-* **Object storage and file inspection**: content-sniffed upload validation and a
-  `Storage` backend that refuses to sign a URL for a path-traversal key. No
-  upload endpoint is mounted yet.
+* **Object storage and file inspection**: content-sniffed upload validation, a
+  `Storage` backend that refuses a path-traversal key before opening a socket, and
+  an upload/download route that authorises *before* signing.
+* **Organizations and memberships** with OWNER/ADMIN/RECRUITER/MEMBER, and the
+  last owner protected against demotion or removal.
+* **Jobs**: PLATFORM listings owned by an organization, and EXTERNAL listings that
+  keep full source provenance and are never presented as posted by a platform
+  employer.
+* **Verification**: a third-party attestation of one specific claim. A worker can
+  never attest to their own experience or project.
+* **References and credentials**: a referee is not a verification, and uploading a
+  certificate does not verify it.
+* **Worker discovery** (`GET /workers`) with conjunctive filters, showing only
+  passports their owner has chosen to expose.
+* **Contact requests**: the only route by which a worker's phone number or email is
+  ever released, and it is the worker who decides.
+* **Notifications** inbox and **reports** with administrator review.
 * **Seed data**: 47 counties, 20 trades, 64 skills, and development accounts.
   Development-only; it refuses to run when `APP_ENV=production`.
-* **28-table schema** with 48 CHECK constraints, partial unique indexes, and a
+* **30-table schema** with CHECK constraints, partial unique indexes, and a
   trigger making `audit_logs` append-only. `alembic check` reports zero drift.
 * **Structured logging** with request correlation and key-name redaction.
 * **Security headers**, an exact-origin CORS allowlist, body-size limits.
-* **828 tests** passing at **93.8%** application coverage.
+* **1,400+ tests** passing at **95%** application coverage.
 * Ruff, MyPy (strict), Bandit, `pip-audit` and a secret scanner all clean.
+* A **non-root, multi-stage Dockerfile** and a **Render blueprint** whose
+  configuration has been booted under `APP_ENV=production` to prove it is valid.
 
 **What does not exist yet:** the upload and download endpoints (the storage layer
 behind them exists, but no route is mounted), the employer/job domain, references
@@ -308,7 +328,7 @@ In production the OpenAPI schema is still served (needed for client generation)
 but the interactive UIs are **disabled by default**. Enable them deliberately
 with `ENABLE_DOCS=true`.
 
-Endpoints are versioned under `/api/v1`. Unversioned production contracts are
+Endpoints are versioned under `/api`. Unversioned production contracts are
 not exposed.
 
 ---

@@ -319,10 +319,22 @@ class TestHealthProbes:
         for path in ("/health", "/health/live", "/health/ready"):
             assert client.get(path).status_code in {200, 503}
 
-    def test_no_versioned_health_route_exists(self, client) -> None:
-        """A fixed path means an infrastructure change is not needed per version."""
-        for path in ("/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready"):
-            assert client.get(path).status_code == 404
+    def test_no_prefixed_health_route_exists(self, client) -> None:
+        """A fixed path means an infrastructure change is not needed per version.
+
+        The API is unprefixed, so a versioned or gateway-prefixed variant must not
+        also resolve. A second mount would be an unnoticed duplicate surface.
+        """
+        for prefix in ("/api", "/api/v1", "/v1"):
+            for probe in ("/health", "/health/live", "/health/ready"):
+                assert client.get(f"{prefix}{probe}").status_code == 404, (
+                    f"{prefix}{probe} resolved; the API must have exactly one mount point"
+                )
+
+    def test_the_api_is_mounted_at_the_root(self, client) -> None:
+        """Guards against a prefix being reintroduced."""
+        spec = client.get("/openapi.json").json()
+        assert not [p for p in spec["paths"] if p.startswith("/api")], spec["paths"]
 
     def test_pool_statistics_are_not_exposed_on_a_public_route(self, client) -> None:
         """Sizing and saturation are useful reconnaissance."""

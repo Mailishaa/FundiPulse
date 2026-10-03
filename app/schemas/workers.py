@@ -293,9 +293,11 @@ class WorkerProfileSummaryResponse(ResponseSchema):
     availability_status: AvailabilityStatus
     is_open_to_opportunities: bool
     experience_summary: ExperienceSummaryResponse | None = None
-    #: Deterministic match score; factors are returned so a result can be justified.
-    match_score: int = 0
-    match_reasons: list[str] = Field(default_factory=list)
+    #: Factual counts of independently verified claims. A count of attestations
+    #: is not a score: nothing here ranks one worker above another.
+    verified_experience_count: int = 0
+    verified_project_count: int = 0
+    credential_count: int = 0
 
 
 class ExperienceSummaryResponse(ResponseSchema):

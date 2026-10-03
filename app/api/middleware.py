@@ -151,7 +151,7 @@ class AccessLogMiddleware:
 
     Records the request id, method, resolved route template, status, duration and
     an error category. The **route template** is logged rather than the raw path:
-    a path contains user-supplied identifiers, whereas ``/api/v1/workers/{id}``
+    a path contains user-supplied identifiers, whereas ``/workers/{id}``
     aggregates safely and is what you want when asking "how slow is this
     endpoint" - a per-UUID path would make every query unique and useless.
     """
@@ -206,17 +206,32 @@ class BodySizeLimitMiddleware:
     this is a cheap first line that stops the trivially large case.
     """
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+    #: Paths whose declared length is bounded by ``multipart_max_bytes`` instead of
+    #: the JSON cap. A 256 KiB JSON ceiling would make the configured 10 MiB upload
+    #: limit unreachable: every upload above 256 KiB would be refused here with a
+    #: generic PAYLOAD_TOO_LARGE before the upload handler ever saw it, and the
+    #: operator's configured limit would be a lie.
+    _MULTIPART_PATHS: frozenset[str] = frozenset({"/files/upload"})
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        multipart_max_bytes: int | None = None,
+    ) -> None:
         self._app = app
         self._max_bytes = max_bytes
+        self._multipart_max_bytes = multipart_max_bytes or max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
 
+        limit = self._limit_for(scope)
         declared = _content_length(scope)
-        if declared is not None and declared > self._max_bytes:
+        if declared is not None and declared > limit:
             request_id = scope.get("state", {}).get("request_id")
             body = {
                 "error": {
@@ -241,6 +256,12 @@ class BodySizeLimitMiddleware:
             return
 
         await self._app(scope, receive, send)
+
+    def _limit_for(self, scope: Scope) -> int:
+        """The declared-length ceiling that applies to this request."""
+        if scope.get("path") in self._MULTIPART_PATHS:
+            return self._multipart_max_bytes
+        return self._max_bytes
 
 
 def _content_length(scope: Scope) -> int | None:

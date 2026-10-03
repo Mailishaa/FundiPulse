@@ -27,12 +27,12 @@ class TestRoleBasedAccessControl:
 
     #: (method, path, valid JSON body for the *permitted* case)
     ADMIN_ONLY = [
-        ("get", "/api/v1/users", None),
-        ("get", "/api/v1/users/{target_id}", None),
-        ("patch", "/api/v1/users/{target_id}/role", {"role": "EMPLOYER"}),
+        ("get", "/users", None),
+        ("get", "/users/{target_id}", None),
+        ("patch", "/users/{target_id}/role", {"role": "EMPLOYER"}),
         (
             "patch",
-            "/api/v1/users/{target_id}/status",
+            "/users/{target_id}/status",
             {"status": "SUSPENDED", "reason": "moderation review"},
         ),
     ]
@@ -75,7 +75,7 @@ class TestPrivilegeEscalation:
 
     def test_role_cannot_be_set_via_registration(self, client) -> None:
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": f"escalate-{uuid.uuid4().hex[:8]}@example.com",
                 "password": VALID_PASSWORD,
@@ -90,7 +90,7 @@ class TestPrivilegeEscalation:
         """`PATCH /users/me` must reject `role` rather than ignoring it."""
         user = make_user(role=UserRole.WORKER)
         response = client.patch(
-            "/api/v1/users/me",
+            "/users/me",
             headers=_login(client, user.email),
             json={"role": "ADMIN"},
         )
@@ -114,9 +114,7 @@ class TestPrivilegeEscalation:
     def test_mass_assignment_fields_are_all_rejected(self, client, make_user, payload) -> None:
         """OWASP A01 mass assignment: every privileged field must 422, not apply."""
         user = make_user()
-        response = client.patch(
-            "/api/v1/users/me", headers=_login(client, user.email), json=payload
-        )
+        response = client.patch("/users/me", headers=_login(client, user.email), json=payload)
         assert response.status_code == 422, payload
         assert user.is_email_verified is True
         assert user.is_active is True
@@ -126,7 +124,7 @@ class TestPrivilegeEscalation:
     ) -> None:
         victim = make_user()
         attacker = make_user(role=UserRole.WORKER)
-        response = client.get(f"/api/v1/users/{victim.id}", headers=_login(client, attacker.email))
+        response = client.get(f"/users/{victim.id}", headers=_login(client, attacker.email))
         assert response.status_code == 403
         assert error_code(response) == "INSUFFICIENT_ROLE"
 
@@ -139,7 +137,7 @@ class TestPrivilegeEscalation:
         """
         user = make_user(is_email_verified=True)
         response = client.patch(
-            "/api/v1/users/me",
+            "/users/me",
             headers=_login(client, user.email),
             json={"email": f"moved-{uuid.uuid4().hex[:8]}@example.com"},
         )
@@ -152,7 +150,7 @@ class TestPrivilegeEscalation:
         taken = make_user()
         attacker = make_user()
         response = client.patch(
-            "/api/v1/users/me",
+            "/users/me",
             headers=_login(client, attacker.email),
             json={"email": taken.email},
         )
@@ -165,14 +163,14 @@ class TestIdorResistance:
 
     def test_unknown_user_id_is_a_404_for_an_admin(self, client, make_user, error_code) -> None:
         admin = make_user(role=UserRole.ADMIN)
-        response = client.get(f"/api/v1/users/{uuid.uuid4()}", headers=_login(client, admin.email))
+        response = client.get(f"/users/{uuid.uuid4()}", headers=_login(client, admin.email))
         assert response.status_code == 404
         assert error_code(response) == "RESOURCE_NOT_FOUND"
 
     def test_a_malformed_uuid_is_a_422_not_a_500(self, client, make_user) -> None:
         """A non-UUID in a path must be a client error, never a crash."""
         admin = make_user(role=UserRole.ADMIN)
-        response = client.get("/api/v1/users/not-a-uuid", headers=_login(client, admin.email))
+        response = client.get("/users/not-a-uuid", headers=_login(client, admin.email))
         assert response.status_code == 422
 
     def test_a_deleted_account_is_not_readable(self, client, make_user) -> None:
@@ -181,11 +179,11 @@ class TestIdorResistance:
         admin = make_user(role=UserRole.ADMIN)
         headers = _login(client, admin.email)
 
-        client.delete("/api/v1/users/me", headers=headers) if False else None
+        client.delete("/users/me", headers=headers) if False else None
 
         # Deactivate the victim as the admin.
         response = client.patch(
-            f"/api/v1/users/{victim.id}/status",
+            f"/users/{victim.id}/status",
             headers=headers,
             json={"status": "SUSPENDED", "reason": "moderation review"},
         )
@@ -194,7 +192,7 @@ class TestIdorResistance:
         # The suspended account can no longer authenticate at all.
         assert (
             client.post(
-                "/api/v1/auth/login",
+                "/auth/login",
                 json={"email": victim.email, "password": VALID_PASSWORD},
             ).status_code
             == 403
@@ -206,7 +204,7 @@ class TestAdminSafetyRails:
         """Otherwise a platform can end up with no administrator."""
         admin = make_user(role=UserRole.ADMIN)
         response = client.patch(
-            f"/api/v1/users/{admin.id}/role",
+            f"/users/{admin.id}/role",
             headers=_login(client, admin.email),
             json={"role": "WORKER"},
         )
@@ -216,7 +214,7 @@ class TestAdminSafetyRails:
     def test_an_admin_cannot_change_their_own_status(self, client, make_user, error_code) -> None:
         admin = make_user(role=UserRole.ADMIN)
         response = client.patch(
-            f"/api/v1/users/{admin.id}/status",
+            f"/users/{admin.id}/status",
             headers=_login(client, admin.email),
             json={"status": "SUSPENDED", "reason": "self sabotage attempt"},
         )
@@ -227,7 +225,7 @@ class TestAdminSafetyRails:
         admin = make_user(role=UserRole.ADMIN)
         target = make_user()
         response = client.patch(
-            f"/api/v1/users/{target.id}/status",
+            f"/users/{target.id}/status",
             headers=_login(client, admin.email),
             json={"status": "SUSPENDED", "reason": "x"},
         )
@@ -243,7 +241,7 @@ class TestAdminSafetyRails:
         admin = make_user(role=UserRole.ADMIN)
         target = make_user(role=UserRole.WORKER)
         client.patch(
-            f"/api/v1/users/{target.id}/role",
+            f"/users/{target.id}/role",
             headers=_login(client, admin.email),
             json={"role": "EMPLOYER"},
         )
@@ -282,14 +280,14 @@ class TestInjection:
     def test_sql_injection_in_login_is_treated_as_data(self, client, make_user, payload) -> None:
         """The ORM parameterises the query; the payload is just a bad string."""
         make_user()
-        response = client.post("/api/v1/auth/login", json={"email": payload, "password": payload})
+        response = client.post("/auth/login", json={"email": payload, "password": payload})
         assert response.status_code in {401, 422}
         assert response.status_code != 500
 
     @pytest.mark.parametrize("payload", SQL_PAYLOADS)
     def test_sql_injection_in_registration_is_rejected(self, client, payload) -> None:
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": payload,
                 "password": VALID_PASSWORD,
@@ -306,7 +304,7 @@ class TestInjection:
     ) -> None:
         admin = make_user(role=UserRole.ADMIN)
         response = client.get(
-            "/api/v1/users",
+            "/users",
             headers=_login(client, admin.email),
             params={"role": payload, "status": "ACTIVE"},
         )
@@ -320,7 +318,7 @@ class TestInjection:
         from sqlalchemy import text
 
         for payload in self.SQL_PAYLOADS:
-            client.post("/api/v1/auth/login", json={"email": payload, "password": payload})
+            client.post("/auth/login", json={"email": payload, "password": payload})
         assert db_session.execute(text("SELECT count(*) FROM users")).scalar_one() >= 0
 
     @pytest.mark.parametrize(
@@ -331,9 +329,7 @@ class TestInjection:
         self, client, make_user, payload
     ) -> None:
         user = make_user()
-        response = client.post(
-            "/api/v1/auth/login", json={"email": user.email, "password": payload}
-        )
+        response = client.post("/auth/login", json={"email": user.email, "password": payload})
         assert response.status_code == 401
         assert response.headers["content-type"].startswith("application/json")
 
@@ -347,18 +343,18 @@ class TestTokenHandling:
     ) -> None:
         user = make_user()
         headers = _login(client, user.email)
-        assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+        assert client.get("/auth/me", headers=headers).status_code == 200
 
         user.is_active = False
         user.status = AccountStatus.DEACTIVATED.value
         db_session.flush()
 
-        assert client.get("/api/v1/auth/me", headers=headers).status_code == 403
+        assert client.get("/auth/me", headers=headers).status_code == 403
 
     def test_bearer_tokens_never_appear_in_the_query_string(self, client, make_user) -> None:
         """A token in a URL leaks into logs and Referer headers."""
         user = make_user()
-        response = client.get(f"/api/v1/auth/me?token={_login_token(client, user.email)}")
+        response = client.get(f"/auth/me?token={_login_token(client, user.email)}")
         assert response.status_code == 401
 
     def test_logout_then_use_is_refused(self, client, make_user) -> None:
@@ -366,12 +362,12 @@ class TestTokenHandling:
         tokens = _login_tokens(client, user.email)
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
-        assert client.post("/api/v1/auth/logout", headers=headers).status_code == 200
+        assert client.post("/auth/logout", headers=headers).status_code == 200
         # The access token has a short lifetime and is not on a revocation list,
         # but the refresh token must be dead.
         assert (
             client.post(
-                "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+                "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
             ).status_code
             == 401
         )
@@ -472,12 +468,12 @@ class TestSecurityHeadersAndCors:
         assert Settings.model_fields["cors_allow_credentials"].default is False
 
     def test_unknown_routes_use_the_standard_error_envelope(self, client, error_code) -> None:
-        response = client.get("/api/v1/does-not-exist")
+        response = client.get("/does-not-exist")
         assert response.status_code == 404
         assert error_code(response) == "ROUTE_NOT_FOUND"
 
     def test_the_wrong_method_uses_the_standard_envelope(self, client, error_code) -> None:
-        response = client.delete("/api/v1/auth/login")
+        response = client.delete("/auth/login")
         assert response.status_code == 405
         assert error_code(response) == "METHOD_NOT_ALLOWED"
 
@@ -555,7 +551,7 @@ class TestAuditTrail:
 
         user = make_user()
         client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": "Wrong-Password-1-Here"},
         )
 
@@ -575,7 +571,7 @@ class TestAuditTrail:
 class TestSensitiveDataIsNeverLeaked:
     @pytest.mark.parametrize(
         "path",
-        ["/health", "/health/live", "/health/ready", "/api/v1/auth/me"],
+        ["/health", "/health/live", "/health/ready", "/auth/me"],
     )
     def test_health_endpoints_disclose_no_internals(self, client, path) -> None:
         body = client.get(path).text.lower()
@@ -602,12 +598,12 @@ class TestSensitiveDataIsNeverLeaked:
         )
         app = create_app(settings)
 
-        @app.get("/api/v1/_boom")
+        @app.get("/_boom")
         def _boom() -> None:  # pragma: no cover - deliberately raises
             raise RuntimeError("internal detail: /srv/app/secret/path.py line 42")
 
         with TestClient(app, raise_server_exceptions=False) as prod_client:
-            response = prod_client.get("/api/v1/_boom")
+            response = prod_client.get("/_boom")
 
         assert response.status_code == 500
         body = response.json()["error"]
@@ -622,7 +618,7 @@ class TestSensitiveDataIsNeverLeaked:
 # Helpers                                                                    #
 # =========================================================================== #
 def _login_tokens(client, email: str, password: str = VALID_PASSWORD) -> dict:
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return response.json()["data"]["tokens"]
 

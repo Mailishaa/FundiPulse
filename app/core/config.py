@@ -132,7 +132,11 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
     log_json: bool = True
-    api_v1_prefix: str = "/api/v1"
+    #: Mount point for the API. Empty: paths are unprefixed resource paths such
+    #: as ``/auth/login``, not versioned under ``/api/v1``. Kept as a setting so a
+    #: deployment can still mount the app under a path (a gateway prefix) without
+    #: the route table hard-coding it.
+    api_v1_prefix: str = ""
 
     #: Extra hostnames accepted in the ``Host`` header. Guards against
     #: Host-header poisoning of generated links and cache poisoning.

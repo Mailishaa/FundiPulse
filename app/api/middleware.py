@@ -151,7 +151,7 @@ class AccessLogMiddleware:
 
     Records the request id, method, resolved route template, status, duration and
     an error category. The **route template** is logged rather than the raw path:
-    a path contains user-supplied identifiers, whereas ``/api/v1/workers/{id}``
+    a path contains user-supplied identifiers, whereas ``/workers/{id}``
     aggregates safely and is what you want when asking "how slow is this
     endpoint" - a per-UUID path would make every query unique and useless.
     """

@@ -39,7 +39,9 @@ Kenya.
 
 **Conventions**
 
-* All endpoints are versioned under `/api/v1`.
+* Paths are unprefixed resource paths (`/auth/login`, `/workers/me/profile`).
+  There is no version segment; versionless paths were chosen deliberately over
+  `/api/v1` so the route table matches the product vocabulary.
 * Successful single-resource responses are `{"data": ..., "meta": {...}}`.
 * List responses are `{"data": [...], "meta": {"pagination": {...}}}`.
 * Errors are `{"error": {"code", "message", "request_id", "details"}}`.

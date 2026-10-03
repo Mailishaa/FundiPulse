@@ -71,7 +71,7 @@ delivery, star ratings, and a general-purpose web scraper. See
 
 **What exists today:**
 
-* **44 endpoints** under `/api/v1` plus three health probes, with full OpenAPI.
+* **44 endpoints** under `/api` plus three health probes, with full OpenAPI.
 * **Full authentication**: registration, login, refresh rotation with reuse
   detection, logout, password change/reset, email verification.
 * **Authorisation**: deny-by-default role gates, mass-assignment protection,
@@ -308,7 +308,7 @@ In production the OpenAPI schema is still served (needed for client generation)
 but the interactive UIs are **disabled by default**. Enable them deliberately
 with `ENABLE_DOCS=true`.
 
-Endpoints are versioned under `/api/v1`. Unversioned production contracts are
+Endpoints are versioned under `/api`. Unversioned production contracts are
 not exposed.
 
 ---

@@ -249,7 +249,7 @@ def auth_headers(client, make_user):
 
     def _factory(user) -> dict[str, str]:
         response = client.post(
-            "/api/v1/auth/login",
+            "/auth/login",
             json={"email": user.email, "password": "Correct-Horse-9-Battery"},
         )
         assert response.status_code == 200, response.text
@@ -275,7 +275,7 @@ def register(client):
     ) -> dict:
         address = email or f"new-{uuid.uuid4().hex[:10]}@example.com"
         response = client.post(
-            "/api/v1/auth/register",
+            "/auth/register",
             json={
                 "email": address,
                 "password": password,

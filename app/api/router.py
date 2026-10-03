@@ -1,7 +1,8 @@
 """Top-level API router.
 
-One place where every domain router is mounted, so the version prefix is applied
-exactly once and the endpoint inventory is reviewable at a glance.
+One place where every domain router is mounted, so the endpoint inventory is
+reviewable at a glance. Paths are unprefixed resource paths; ``main.py`` applies
+the (empty by default) mount prefix exactly once.
 """
 
 from __future__ import annotations

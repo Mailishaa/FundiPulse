@@ -47,7 +47,7 @@ DESCRIPTION = (
 
 ## Conventions
 
-* **Base URL** - all versioned endpoints live under `/api/v1`.
+* **Base URL** - endpoints are unprefixed resource paths, e.g. `/auth/login`.
 * **Authentication** - `Authorization: Bearer <access token>`. Access tokens are
   short-lived; refresh tokens are rotating and revocable.
 * **Pagination** - every collection endpoint takes `?page=` and `?page_size=`

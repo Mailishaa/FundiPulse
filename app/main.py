@@ -27,6 +27,7 @@ from app.api.middleware import (
     SecurityHeadersMiddleware,
     build_cors_middleware,
 )
+from app.api.rate_limit_middleware import RateLimitHeaderMiddleware
 from app.api.router import api_router, health_router
 from app.core.config import Settings, get_settings
 from app.core.constants import API_DESCRIPTION, APP_NAME, APP_VERSION
@@ -39,6 +40,11 @@ logger = get_logger(__name__)
 #: the upload route, so this is a backstop for everything else.
 MAX_JSON_BODY_BYTES = 256 * 1024
 
+#: Headroom for multipart framing (boundaries, part headers, the trailing
+#: delimiter). Without it a file of exactly `max_upload_size_bytes` would be
+#: rejected because the envelope pushes the request over the ceiling.
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+
 DESCRIPTION = (
     API_DESCRIPTION
     + """
@@ -47,7 +53,7 @@ DESCRIPTION = (
 
 ## Conventions
 
-* **Base URL** - all versioned endpoints live under `/api/v1`.
+* **Base URL** - endpoints are unprefixed resource paths, e.g. `/auth/login`.
 * **Authentication** - `Authorization: Bearer <access token>`. Access tokens are
   short-lived; refresh tokens are rotating and revocable.
 * **Pagination** - every collection endpoint takes `?page=` and `?page_size=`
@@ -121,11 +127,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     #   body size    -> before the route reads the body
     #   access log   -> innermost, so it measures the route, not the wrapper
     app.add_middleware(AccessLogMiddleware)
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_JSON_BODY_BYTES)
+    # The upload route carries a file, so it is bounded by the configured upload
+    # limit plus multipart framing overhead rather than the JSON cap. Without this
+    # a 10 MiB `max_upload_size_bytes` would be unreachable: anything over 256 KiB
+    # would be refused here, before the upload handler ever ran.
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=MAX_JSON_BODY_BYTES,
+        multipart_max_bytes=resolved.max_upload_size_bytes + MULTIPART_OVERHEAD_BYTES,
+    )
     cors = build_cors_middleware(resolved)
     if cors is not None:
         app.add_middleware(cors)
     app.add_middleware(SecurityHeadersMiddleware, settings=resolved)
+    app.add_middleware(RateLimitHeaderMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
     register_exception_handlers(app)

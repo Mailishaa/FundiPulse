@@ -39,9 +39,12 @@ Kenya.
 
 **Conventions**
 
-* All endpoints are versioned under `/api/v1`.
+* Paths are unprefixed resource paths (`/auth/login`, `/workers/me/profile`).
+  There is no version segment; versionless paths were chosen deliberately over
+  `/api/v1` so the route table matches the product vocabulary.
 * Successful single-resource responses are `{"data": ..., "meta": {...}}`.
-* List responses are `{"data": [...], "meta": {"pagination": {...}}}`.
+* List responses are `{"data": [...], "meta": {...}}`, with the pagination
+  fields flat on `meta` (`total_items`, `page`, `has_next`).
 * Errors are `{"error": {"code", "message", "request_id", "details"}}`.
 * Every list endpoint is paginated; `page_size` is capped.
 * Authentication uses `Authorization: Bearer <access token>`.
@@ -416,6 +419,21 @@ class NotificationEventType(StrEnum):
     CONTENT_REPORTED = "CONTENT_REPORTED"
 
 
+class ContactRequestStatus(StrEnum):
+    """Where an employer's request to reach a worker has got to.
+
+    ``PENDING`` is the only state in which the worker can answer. ``EXPIRED`` is
+    set by the sweep task rather than by either party, so a lapsed request is
+    distinguishable from one the worker actively turned down.
+    """
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+
+
 # --------------------------------------------------------------------------- #
 # Audit log                                                                  #
 # --------------------------------------------------------------------------- #
@@ -495,15 +513,17 @@ MAX_PAGE_SIZE = 100
 
 #: Fields a client may sort worker search results by. Anything else is rejected
 #: rather than ignored, so a client never silently gets the wrong ordering.
+#: No ranking field: sorting by a computed "score" would reintroduce the trust
+#: ranking ADR 0010 rules out, so ordering is only ever by an objective field.
 WORKER_SORT_FIELDS: frozenset[str] = frozenset(
-    {"match_score", "recently_updated", "experience_desc", "created_desc"}
+    {"recently_updated", "experience_desc", "created_desc"}
 )
 
 JOB_SORT_FIELDS: frozenset[str] = frozenset(
     {"published_at_desc", "closing_at_asc", "created_at_desc"}
 )
 
-DEFAULT_WORKER_SORT = "match_score"
+DEFAULT_WORKER_SORT = "recently_updated"
 DEFAULT_JOB_SORT = "published_at_desc"
 
 MAX_SEARCH_QUERY_LENGTH = 120

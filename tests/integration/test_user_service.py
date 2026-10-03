@@ -27,7 +27,7 @@ pytestmark = pytest.mark.integration
 
 
 def _login(client, email: str, password: str = "Correct-Horse-9-Battery") -> str:  # noqa: S107
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return response.json()["data"]["tokens"]["access_token"]
 

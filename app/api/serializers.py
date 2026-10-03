@@ -117,8 +117,7 @@ def to_summary(
     *,
     county: County | None = None,
     experience: dict[str, Any] | None = None,
-    match_score: int = 0,
-    match_reasons: list[str] | None = None,
+    verified: dict[str, int] | None = None,
 ) -> WorkerProfileSummaryResponse:
     """Search-result row. Factual signals only, no quality score (ADR 0010)."""
     summary = None
@@ -141,8 +140,9 @@ def to_summary(
         availability_status=profile.availability_status,
         is_open_to_opportunities=profile.is_open_to_opportunities,
         experience_summary=summary,
-        match_score=match_score,
-        match_reasons=list(match_reasons or []),
+        verified_experience_count=int((verified or {}).get("experiences", 0)),
+        verified_project_count=int((verified or {}).get("projects", 0)),
+        credential_count=int((verified or {}).get("credentials", 0)),
     )
 
 

@@ -1,0 +1,58 @@
+{
+  "_comment": "A partner feed in a different shape entirely: records under 'data', cursor paging, snake_case keys, a null employer on one entry, and a next_cursor that declares the payload incomplete. PARTIAL coverage means absence from this payload is not evidence of anything, so it must produce no removal signal.",
+  "source": "partner-feed",
+  "meta": {
+    "generated": "2026-09-01T05:00:00Z",
+    "next_cursor": "eyJvZmZzZXQiOjIwfQ==",
+    "record_count": 3
+  },
+  "data": [
+    {
+      "reference": "PF-2026-0001",
+      "title": "Steel Fixer - Structural Works",
+      "summary": "Steel fixers required for structural steelwork on a water treatment plant. Must be able to read bar bending schedules.",
+      "location": "Kitengela",
+      "organisation_name": null,
+      "engagement": "contract",
+      "grade": "senior",
+      "experience": "5-8",
+      "compensation": { "from": 1200, "to": 1500, "unit": "daily", "ccy": "KES" },
+      "posted": "2026-08-25T07:45:00Z",
+      "deadline": "2026-10-01T17:00:00Z",
+      "status": "accepting_applications",
+      "href": "/v2/listings/PF-2026-0001",
+      "apply_href": "https://partner.example.com/apply/PF-2026-0001"
+    },
+    {
+      "reference": "PF-2026-0002",
+      "title": "Formwork Carpenter",
+      "summary": "Formwork carpenters for a school block. Timber and steel formwork experience essential.",
+      "location": "Machakos",
+      "organisation_name": "Machakos Schools Project",
+      "engagement": "casual",
+      "grade": "intermediate",
+      "experience": "3",
+      "compensation": { "from": 85000, "to": 95000, "unit": "monthly", "ccy": "KES" },
+      "posted": "2026-08-29T10:00:00Z",
+      "deadline": "in 2 weeks",
+      "status": "live",
+      "href": "https://feeds.partner.example.com/v2/listings/PF-2026-0002"
+    },
+    {
+      "reference": "PF-2026-0003",
+      "title": "Site Supervisor - Civil Works",
+      "summary": "Site supervisor for civil works drainage and water reticulation. MUST have a recognised trade test certificate.",
+      "location": "Kisumu",
+      "organisation_name": "Lake Basin Contractors",
+      "engagement": "full time",
+      "grade": "senior",
+      "experience": "7",
+      "compensation": { "from": 180000, "to": 220000, "unit": "monthly", "ccy": "KES" },
+      "posted": "2026-08-14T06:30:00Z",
+      "deadline": "2026-09-20T17:00:00Z",
+      "status": "expired",
+      "href": "/v2/listings/PF-2026-0003",
+      "apply_href": "https://elsewhere.example.org/apply/999"
+    }
+  ]
+}

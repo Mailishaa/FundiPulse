@@ -27,6 +27,12 @@ from app.core.exceptions import (
     InsufficientRoleError,
     NotFoundError,
 )
+from app.core.rate_limit import (
+    RateLimitDecision,
+    RateLimiter,
+    get_rate_limiter,
+    resolve_identity,
+)
 from app.db.models.user import User
 from app.db.session import get_db
 from app.services.auth_service import AuthenticatedUser, AuthService, RequestContext
@@ -237,3 +243,56 @@ def get_path_uuid(name: str, value: str) -> uuid.UUID:
         return uuid.UUID(value)
     except (ValueError, AttributeError, TypeError) as exc:
         raise NotFoundError("The requested resource was not found.") from exc
+
+
+# --------------------------------------------------------------------------- #
+# Rate limiting                                                               #
+# --------------------------------------------------------------------------- #
+RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
+def rate_limit(rule_name: str, *, authenticated: bool = False) -> object:
+    """Build a dependency enforcing one named rule for the current request.
+
+    ``authenticated=True`` keys the bucket on the caller's user id, so many workers
+    behind one site NAT do not share an allowance. The anonymous variant keys on the
+    validated client address, which is the only thing available before login.
+
+    Declaring this as a parameter rather than applying it in middleware means the
+    limit is visible in the route's signature and in the OpenAPI document. A limit
+    that lives only in a middleware list is invisible to the next person who adds an
+    endpoint, and endpoints that forget it are unlimited forever.
+    """
+
+    def dependency(
+        request: Request,
+        limiter: RateLimiterDep,
+        user: OptionalUser = None,
+    ) -> RateLimitDecision:
+        if not authenticated:
+            user = None  # never let a stale token change an anonymous bucket
+        identity = resolve_identity(
+            rule_name,
+            user_id=user.id if user is not None else None,
+            client_ip=resolve_client_ip(request),
+        )
+        decision = limiter.enforce(limiter.rule_for(rule_name), identity)
+        # Stashed so the response middleware can attach the standard headers to a
+        # success as well as to a 429. Without this a client cannot tell how much
+        # allowance it has left until it is already refused.
+        request.state.rate_limit_decision = decision
+        return decision
+
+    return dependency
+
+
+LoginRateLimit = Annotated[RateLimitDecision, Depends(rate_limit("login"))]
+RegisterRateLimit = Annotated[RateLimitDecision, Depends(rate_limit("register"))]
+PasswordResetRateLimit = Annotated[RateLimitDecision, Depends(rate_limit("password_reset"))]
+FileUploadRateLimit = Annotated[
+    RateLimitDecision, Depends(rate_limit("file_upload", authenticated=True))
+]
+JobApplyRateLimit = Annotated[
+    RateLimitDecision, Depends(rate_limit("job_apply", authenticated=True))
+]
+SearchRateLimit = Annotated[RateLimitDecision, Depends(rate_limit("search"))]

@@ -50,13 +50,13 @@ def worker(client, make_user, catalogue):
     """A registered worker with a passport and a valid bearer token."""
     user = make_user()
     response = client.post(
-        "/api/v1/auth/login",
+        "/auth/login",
         json={"email": user.email, "password": "Correct-Horse-9-Battery"},
     )
     assert response.status_code == 200, response.text
     token = response.json()["data"]["tokens"]["access_token"]
     created = client.post(
-        "/api/v1/workers/me/profile",
+        "/workers/me/profile",
         headers={"Authorization": f"Bearer {token}"},
         json={"display_name": "Amina Wanjiru", "primary_trade_code": "MASONRY"},
     )
@@ -74,31 +74,31 @@ def worker(client, make_user, catalogue):
 # --------------------------------------------------------------------------- #
 class TestProfile:
     def test_creates_a_passport(self, client, worker) -> None:
-        response = client.get("/api/v1/workers/me/profile", headers=worker["headers"])
+        response = client.get("/workers/me/profile", headers=worker["headers"])
         assert response.status_code == 200
         assert response.json()["data"]["display_name"] == "Amina Wanjiru"
 
     def test_defaults_to_private_and_not_contactable(self, client, worker) -> None:
-        data = client.get("/api/v1/workers/me/profile", headers=worker["headers"]).json()["data"]
+        data = client.get("/workers/me/profile", headers=worker["headers"]).json()["data"]
         assert data["visibility"] == ProfileVisibility.PRIVATE.value
         assert data["contact_preference"] == ContactPreference.NONE.value
         assert data["is_contactable"] is False
 
     def test_one_passport_per_account(self, client, worker) -> None:
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"display_name": "Second Attempt"},
         )
         assert response.status_code == 409
 
     def test_requires_authentication(self, client) -> None:
-        assert client.get("/api/v1/workers/me/profile").status_code == 401
+        assert client.get("/workers/me/profile").status_code == 401
 
     def test_unknown_trade_code_is_rejected(self, client, make_user) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=_headers(client, user.email),
             json={"display_name": "Nobody", "primary_trade_code": "TIME_TRAVEL"},
         )
@@ -109,7 +109,7 @@ class TestProfile:
         user = make_user()
         token = _token(client, user.email)
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers={"Authorization": f"Bearer {token}"},
             json={"display_name": name},
         )
@@ -127,7 +127,7 @@ class TestProfile:
     def test_accepts_kenyan_phone_formats(self, client, make_user, phone, stored) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=_headers(client, user.email),
             json={"display_name": "Phone Tester", "phone_number": phone},
         )
@@ -140,7 +140,7 @@ class TestProfile:
     def test_rejects_non_kenyan_phone_formats(self, client, make_user, phone) -> None:
         user = make_user()
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=_headers(client, user.email),
             json={"display_name": "Phone Tester", "phone_number": phone},
         )
@@ -150,7 +150,7 @@ class TestProfile:
         user = make_user()
         token = _token(client, user.email)
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers={"Authorization": f"Bearer {token}"},
             json={"display_name": "Soon", "availability_status": "AVAILABLE_SOON"},
         )
@@ -160,7 +160,7 @@ class TestProfile:
         user = make_user()
         token = _token(client, user.email)
         response = client.post(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "display_name": "Soon",
@@ -173,12 +173,12 @@ class TestProfile:
 
     def test_switching_away_from_available_soon_clears_the_date(self, client, worker) -> None:
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"availability_status": "AVAILABLE_SOON", "available_from": str(TODAY)},
         )
         response = client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"availability_status": "AVAILABLE"},
         )
@@ -189,7 +189,7 @@ class TestProfile:
         self, client, worker
     ) -> None:
         response = client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"user_id": str(uuid.uuid4()), "is_email_verified": True},
         )
@@ -201,7 +201,7 @@ class TestPrivacyBoundary:
 
     def test_the_owner_sees_their_own_contact_details(self, client, worker) -> None:
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={
                 "phone_number": "0712345678",
@@ -210,14 +210,14 @@ class TestPrivacyBoundary:
                 "contact_preference": "IN_APP",
             },
         )
-        data = client.get("/api/v1/workers/me/profile", headers=worker["headers"]).json()["data"]
+        data = client.get("/workers/me/profile", headers=worker["headers"]).json()["data"]
         assert data["phone_number"] == "0712345678"
         assert data["contact_email"] == "personal@example.com"
         assert data["is_contactable"] is True
 
     def test_another_user_never_sees_contact_details(self, client, worker, make_user) -> None:
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={
                 "phone_number": "0712345678",
@@ -227,7 +227,7 @@ class TestPrivacyBoundary:
         )
         stranger = make_user()
         response = client.get(
-            f"/api/v1/workers/{worker['profile_id']}", headers=_headers(client, stranger.email)
+            f"/workers/{worker['profile_id']}", headers=_headers(client, stranger.email)
         )
         assert response.status_code == 200
         body = response.text
@@ -238,11 +238,11 @@ class TestPrivacyBoundary:
 
     def test_anonymous_never_sees_contact_details(self, client, worker) -> None:
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"phone_number": "0712345678", "visibility": "PUBLIC"},
         )
-        response = client.get(f"/api/v1/workers/{worker['profile_id']}")
+        response = client.get(f"/workers/{worker['profile_id']}")
         assert response.status_code == 200
         assert "0712345678" not in response.text
 
@@ -250,13 +250,13 @@ class TestPrivacyBoundary:
         """403 would confirm the passport exists."""
         stranger = make_user()
         response = client.get(
-            f"/api/v1/workers/{worker['profile_id']}", headers=_headers(client, stranger.email)
+            f"/workers/{worker['profile_id']}", headers=_headers(client, stranger.email)
         )
         assert response.status_code == 404
 
     def test_confidential_projects_are_absent_from_the_public_view(self, client, worker) -> None:
         client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={
                 "name": "Confidential Hospital Wing",
@@ -265,20 +265,17 @@ class TestPrivacyBoundary:
             },
         )
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"visibility": "PUBLIC"},
         )
         assert (
-            "Confidential Hospital Wing"
-            not in client.get(f"/api/v1/workers/{worker['profile_id']}").text
+            "Confidential Hospital Wing" not in client.get(f"/workers/{worker['profile_id']}").text
         )
 
     def test_a_worker_always_sees_their_own_private_passport(self, client, worker) -> None:
         assert (
-            client.get(
-                f"/api/v1/workers/{worker['profile_id']}", headers=worker["headers"]
-            ).status_code
+            client.get(f"/workers/{worker['profile_id']}", headers=worker["headers"]).status_code
             == 200
         )
 
@@ -286,7 +283,7 @@ class TestPrivacyBoundary:
 class TestTradesAndSkills:
     def test_replaces_the_trade_list(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={
                 "trades": [
@@ -302,7 +299,7 @@ class TestTradesAndSkills:
 
     def test_two_primary_trades_are_rejected(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={
                 "trades": [
@@ -315,7 +312,7 @@ class TestTradesAndSkills:
 
     def test_a_duplicate_trade_is_rejected(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={"trades": [{"trade_code": "MASONRY"}, {"trade_code": "MASONRY"}]},
         )
@@ -323,7 +320,7 @@ class TestTradesAndSkills:
 
     def test_an_unknown_trade_is_rejected(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={"trades": [{"trade_code": "NOT_A_TRADE"}]},
         )
@@ -331,12 +328,12 @@ class TestTradesAndSkills:
 
     def test_replacing_trades_does_not_leave_a_stale_primary(self, client, worker) -> None:
         client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={"trades": [{"trade_code": "MASONRY", "is_primary": True}]},
         )
         response = client.put(
-            "/api/v1/workers/me/trades",
+            "/workers/me/trades",
             headers=worker["headers"],
             json={"trades": [{"trade_code": "PLUMBING"}]},
         )
@@ -346,7 +343,7 @@ class TestTradesAndSkills:
 
     def test_replaces_the_skill_list(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/skills",
+            "/workers/me/skills",
             headers=worker["headers"],
             json={
                 "skills": [
@@ -364,17 +361,17 @@ class TestTradesAndSkills:
     def test_proficiency_is_labelled_as_declared(self, client, worker) -> None:
         """The payload carries no flag, so the contract must label it instead."""
         client.put(
-            "/api/v1/workers/me/skills",
+            "/workers/me/skills",
             headers=worker["headers"],
             json={"skills": [{"skill_code": "BLOCK_LAYING", "proficiency": "EXPERT"}]},
         )
-        data = client.get("/api/v1/workers/me/profile", headers=worker["headers"]).json()["data"]
+        data = client.get("/workers/me/profile", headers=worker["headers"]).json()["data"]
         assert data["skills"][0]["proficiency"] == "EXPERT"
         assert "self-declared" in SkillRefResponse.model_fields["proficiency"].description.lower()
 
     def test_replaces_preferred_counties(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/preferred-counties",
+            "/workers/me/preferred-counties",
             headers=worker["headers"],
             json={"county_codes": ["NAKURU", "BOMET"]},
         )
@@ -386,7 +383,7 @@ class TestTradesAndSkills:
 
     def test_an_unknown_county_is_rejected(self, client, worker) -> None:
         response = client.put(
-            "/api/v1/workers/me/preferred-counties",
+            "/workers/me/preferred-counties",
             headers=worker["headers"],
             json={"county_codes": ["ATLANTIS"]},
         )
@@ -404,9 +401,7 @@ class TestWorkExperience:
             "trade_code": "MASONRY",
         }
         payload.update(overrides)
-        return client.post(
-            "/api/v1/workers/me/experiences", headers=worker["headers"], json=payload
-        )
+        return client.post("/workers/me/experiences", headers=worker["headers"], json=payload)
 
     def test_records_and_returns_a_claim(self, client, worker) -> None:
         response = self._create(client, worker)
@@ -446,13 +441,11 @@ class TestWorkExperience:
 
     def test_lists_and_reads_back(self, client, worker) -> None:
         created = self._create(client, worker).json()["data"]
-        listing = client.get("/api/v1/workers/me/experiences", headers=worker["headers"])
+        listing = client.get("/workers/me/experiences", headers=worker["headers"])
         assert listing.status_code == 200
         assert listing.json()["meta"]["total_items"] == 1
 
-        single = client.get(
-            f"/api/v1/workers/me/experiences/{created['id']}", headers=worker["headers"]
-        )
+        single = client.get(f"/workers/me/experiences/{created['id']}", headers=worker["headers"])
         assert single.status_code == 200
         assert single.json()["data"]["id"] == created["id"]
 
@@ -460,7 +453,7 @@ class TestWorkExperience:
         for _ in range(3):
             self._create(client, worker)
         response = client.get(
-            "/api/v1/workers/me/experiences?page=1&page_size=2", headers=worker["headers"]
+            "/workers/me/experiences?page=1&page_size=2", headers=worker["headers"]
         )
         assert len(response.json()["data"]) == 2
         assert response.json()["meta"]["total_items"] == 3
@@ -469,18 +462,18 @@ class TestWorkExperience:
         created = self._create(client, worker).json()["data"]
         assert (
             client.delete(
-                f"/api/v1/workers/me/experiences/{created['id']}", headers=worker["headers"]
+                f"/workers/me/experiences/{created['id']}", headers=worker["headers"]
             ).status_code
             == 200
         )
         assert (
             client.get(
-                f"/api/v1/workers/me/experiences/{created['id']}", headers=worker["headers"]
+                f"/workers/me/experiences/{created['id']}", headers=worker["headers"]
             ).status_code
             == 404
         )
         assert (
-            client.get("/api/v1/workers/me/experiences", headers=worker["headers"]).json()["meta"][
+            client.get("/workers/me/experiences", headers=worker["headers"]).json()["meta"][
                 "total_items"
             ]
             == 0
@@ -489,7 +482,7 @@ class TestWorkExperience:
     def test_an_unknown_id_is_a_404(self, client, worker) -> None:
         assert (
             client.get(
-                f"/api/v1/workers/me/experiences/{uuid.uuid4()}", headers=worker["headers"]
+                f"/workers/me/experiences/{uuid.uuid4()}", headers=worker["headers"]
             ).status_code
             == 404
         )
@@ -510,7 +503,7 @@ class TestWorkExperience:
             start_date=str(TODAY - timedelta(days=700)),
             end_date=str(TODAY - timedelta(days=400)),
         )
-        summary = client.get("/api/v1/workers/me/experience-summary", headers=worker["headers"])
+        summary = client.get("/workers/me/experience-summary", headers=worker["headers"])
         assert summary.status_code == 200, summary.text
         data = summary.json()["data"]
         # The outer record spans 365 days and the second sits wholly inside it, so
@@ -520,9 +513,9 @@ class TestWorkExperience:
         assert data["earliest_start"] is not None
 
     def test_no_experiences_yields_zero(self, client, worker) -> None:
-        data = client.get(
-            "/api/v1/workers/me/experience-summary", headers=worker["headers"]
-        ).json()["data"]
+        data = client.get("/workers/me/experience-summary", headers=worker["headers"]).json()[
+            "data"
+        ]
         assert float(data["total_years"]) == 0.0
         assert data["record_count"] == 0
 
@@ -532,7 +525,7 @@ class TestIdor:
 
     def test_cannot_read_another_workers_experience(self, client, worker, make_user) -> None:
         created = client.post(
-            "/api/v1/workers/me/experiences",
+            "/workers/me/experiences",
             headers=worker["headers"],
             json={
                 "employer_name": "Secret Employer",
@@ -545,7 +538,7 @@ class TestIdor:
         attacker = make_user()
         _create_passport(client, attacker)
         response = client.get(
-            f"/api/v1/workers/me/experiences/{created['id']}",
+            f"/workers/me/experiences/{created['id']}",
             headers=_headers(client, attacker.email),
         )
         assert response.status_code == 404
@@ -553,7 +546,7 @@ class TestIdor:
 
     def test_cannot_modify_another_workers_experience(self, client, worker, make_user) -> None:
         created = client.post(
-            "/api/v1/workers/me/experiences",
+            "/workers/me/experiences",
             headers=worker["headers"],
             json={
                 "employer_name": "Secret Employer",
@@ -566,20 +559,20 @@ class TestIdor:
         attacker = make_user()
         _create_passport(client, attacker)
         response = client.patch(
-            f"/api/v1/workers/me/experiences/{created['id']}",
+            f"/workers/me/experiences/{created['id']}",
             headers=_headers(client, attacker.email),
             json={"employer_name": "Hijacked"},
         )
         assert response.status_code == 404
 
         still_there = client.get(
-            f"/api/v1/workers/me/experiences/{created['id']}", headers=worker["headers"]
+            f"/workers/me/experiences/{created['id']}", headers=worker["headers"]
         )
         assert still_there.json()["data"]["employer_name"] == "Secret Employer"
 
     def test_cannot_delete_another_workers_project(self, client, worker, make_user) -> None:
         project = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={"name": "Private Site", "role_title": "Mason"},
         ).json()["data"]
@@ -587,13 +580,13 @@ class TestIdor:
         attacker = make_user()
         _create_passport(client, attacker)
         response = client.delete(
-            f"/api/v1/workers/me/projects/{project['id']}",
+            f"/workers/me/projects/{project['id']}",
             headers=_headers(client, attacker.email),
         )
         assert response.status_code == 404
         assert (
             client.get(
-                f"/api/v1/workers/me/projects/{project['id']}", headers=worker["headers"]
+                f"/workers/me/projects/{project['id']}", headers=worker["headers"]
             ).status_code
             == 200
         )
@@ -605,11 +598,9 @@ class TestIdor:
             {"display_name": "Rewritten By Employer"},
             {"visibility": "PUBLIC"},
         ):
-            response = client.patch("/api/v1/workers/me/profile", headers=headers, json=payload)
+            response = client.patch("/workers/me/profile", headers=headers, json=payload)
             assert response.status_code in {403, 404}
-        unchanged = client.get("/api/v1/workers/me/profile", headers=worker["headers"]).json()[
-            "data"
-        ]
+        unchanged = client.get("/workers/me/profile", headers=worker["headers"]).json()["data"]
         assert unchanged["display_name"] == "Amina Wanjiru"
         assert unchanged["visibility"] == ProfileVisibility.PRIVATE.value
 
@@ -617,13 +608,13 @@ class TestIdor:
         self, client, worker, make_admin
     ) -> None:
         client.patch(
-            "/api/v1/workers/me/profile",
+            "/workers/me/profile",
             headers=worker["headers"],
             json={"phone_number": "0712345678", "visibility": "PUBLIC"},
         )
         admin = make_admin()
         response = client.get(
-            f"/api/v1/workers/{worker['profile_id']}", headers=_headers(client, admin.email)
+            f"/workers/{worker['profile_id']}", headers=_headers(client, admin.email)
         )
         assert response.status_code == 200
         assert "0712345678" not in response.text, "admin role must not widen the public schema"
@@ -632,7 +623,7 @@ class TestIdor:
 class TestProjects:
     def test_documents_a_project(self, client, worker) -> None:
         response = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={
                 "name": "Nakuru Mall Extension",
@@ -650,7 +641,7 @@ class TestProjects:
 
     def test_an_unknown_project_type_is_rejected(self, client, worker) -> None:
         response = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={"name": "X", "role_title": "Mason", "project_type": "SPACE_STATION"},
         )
@@ -658,7 +649,7 @@ class TestProjects:
 
     def test_the_role_on_the_project_is_required(self, client, worker) -> None:
         response = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={"name": "Nameless Role"},
         )
@@ -666,13 +657,13 @@ class TestProjects:
 
     def test_crud_round_trip(self, client, worker) -> None:
         created = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={"name": "Warehouse", "role_title": "Mason"},
         ).json()["data"]
 
         updated = client.patch(
-            f"/api/v1/workers/me/projects/{created['id']}",
+            f"/workers/me/projects/{created['id']}",
             headers=worker["headers"],
             json={"role_title": "Senior Mason"},
         )
@@ -680,20 +671,20 @@ class TestProjects:
 
         assert (
             client.delete(
-                f"/api/v1/workers/me/projects/{created['id']}", headers=worker["headers"]
+                f"/workers/me/projects/{created['id']}", headers=worker["headers"]
             ).status_code
             == 200
         )
         assert (
             client.get(
-                f"/api/v1/workers/me/projects/{created['id']}", headers=worker["headers"]
+                f"/workers/me/projects/{created['id']}", headers=worker["headers"]
             ).status_code
             == 404
         )
 
     def test_future_dates_are_rejected(self, client, worker) -> None:
         response = client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={
                 "name": "Tomorrow",
@@ -705,54 +696,52 @@ class TestProjects:
 
     def test_the_owner_listing_includes_confidential_projects(self, client, worker) -> None:
         client.post(
-            "/api/v1/workers/me/projects",
+            "/workers/me/projects",
             headers=worker["headers"],
             json={"name": "Secret Client", "role_title": "Mason", "is_confidential": True},
         )
-        listed = client.get("/api/v1/workers/me/projects", headers=worker["headers"])
+        listed = client.get("/workers/me/projects", headers=worker["headers"])
         assert "Secret Client" in listed.text
 
 
 class TestCatalogueEndpoints:
     def test_trades_are_public(self, client, catalogue) -> None:
-        response = client.get("/api/v1/trades")
+        response = client.get("/trades")
         assert response.status_code == 200
         assert {t["code"] for t in response.json()["data"]} >= {"MASONRY", "PLUMBING"}
 
     def test_skills_filter_by_trade(self, client, catalogue) -> None:
-        response = client.get("/api/v1/skills?trade=MASONRY")
+        response = client.get("/skills?trade=MASONRY")
         assert response.status_code == 200
         assert response.json()["data"]
 
     def test_counties_are_public(self, client, catalogue) -> None:
-        response = client.get("/api/v1/counties")
+        response = client.get("/counties")
         assert response.status_code == 200
         assert "NAKURU" in {c["code"] for c in response.json()["data"]}
 
     def test_an_unknown_trade_filter_is_a_422(self, client, catalogue) -> None:
-        assert client.get("/api/v1/skills?trade=NOPE").status_code == 422
+        assert client.get("/skills?trade=NOPE").status_code == 422
 
     def test_trade_counts_require_an_admin(self, client, catalogue, make_user) -> None:
         worker_user = make_user(email=f"w-{uuid.uuid4().hex[:8]}@example.com")
         assert (
             client.get(
-                "/api/v1/admin/catalogue/trades", headers=_headers(client, worker_user.email)
+                "/admin/catalogue/trades", headers=_headers(client, worker_user.email)
             ).status_code
             == 403
         )
 
     def test_an_admin_sees_worker_counts(self, client, catalogue, make_admin) -> None:
         admin = make_admin()
-        response = client.get(
-            "/api/v1/admin/catalogue/trades", headers=_headers(client, admin.email)
-        )
+        response = client.get("/admin/catalogue/trades", headers=_headers(client, admin.email))
         assert response.status_code == 200
         assert all("worker_count" in t for t in response.json()["data"])
 
     def test_a_deactivated_catalogue_entry_disappears(self, client, catalogue, db_session) -> None:
         catalogue["trades"]["WELDING"].is_active = False
         db_session.flush()
-        response = client.get("/api/v1/trades")
+        response = client.get("/trades")
         assert "WELDING" not in {t["code"] for t in response.json()["data"]}
 
     def test_only_an_admin_may_edit_the_catalogue(self, client, catalogue, make_user) -> None:
@@ -760,7 +749,7 @@ class TestCatalogueEndpoints:
         user = make_user()
         assert (
             client.patch(
-                f"/api/v1/admin/catalogue/trades/{trade_id}",
+                f"/admin/catalogue/trades/{trade_id}",
                 headers=_headers(client, user.email),
                 json={"is_active": False},
             ).status_code
@@ -774,7 +763,7 @@ class TestCatalogueEndpoints:
 
         admin = make_admin()
         response = client.patch(
-            f"/api/v1/admin/catalogue/trades/{catalogue['trades']['WELDING'].id}",
+            f"/admin/catalogue/trades/{catalogue['trades']['WELDING'].id}",
             headers=_headers(client, admin.email),
             json={"name": "Welding & Fabrication"},
         )
@@ -796,7 +785,7 @@ DEFAULT_TEST_PASSWORD = "Correct-Horse-9-Battery"
 
 
 def _token(client, email: str, password: str = DEFAULT_TEST_PASSWORD) -> str:
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     return response.json()["data"]["tokens"]["access_token"]
 
@@ -807,7 +796,7 @@ def _headers(client, email: str) -> dict[str, str]:
 
 def _create_passport(client, user) -> dict:
     return client.post(
-        "/api/v1/workers/me/profile",
+        "/workers/me/profile",
         headers=_headers(client, user.email),
         json={"display_name": "Second Worker"},
     ).json()

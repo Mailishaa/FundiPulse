@@ -147,10 +147,17 @@ class Job(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, VersionMix
             unique=True,
             postgresql_where=text("source_job_id IS NOT NULL AND deleted_at IS NULL"),
         ),
-        # A published or closed listing must belong to an organization: this is
-        # what makes "who owns this job" answerable without inference.
+        # A published or closed platform listing must belong to an organization:
+        # this is what makes "who owns this job" answerable without inference.
+        #
+        # The carve-out is `source_type <> 'PLATFORM'`, not an EXTERNAL member.
+        # JobSourceType has no such member - EMPLOYER_SUBMITTED, AGGREGATED_PUBLIC
+        # and PARTNER_FEED are the externally sourced values - and an earlier
+        # version of this predicate tested for "EXTERNAL", which matched nothing and
+        # so silently left the original constraint in force: an aggregated listing
+        # could never reach OPEN without an employer attached to it.
         CheckConstraint(
-            "status = 'DRAFT' OR organization_id IS NOT NULL",
+            "status = 'DRAFT' OR organization_id IS NOT NULL OR source_type <> 'PLATFORM'",
             name="jobs_published_requires_organization",
         ),
         CheckConstraint(

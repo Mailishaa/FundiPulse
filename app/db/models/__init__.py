@@ -10,10 +10,12 @@ from __future__ import annotations
 from app.db.base import Base, install_enum_checks
 from app.db.models.audit import AuditLog
 from app.db.models.catalogue import County, Skill, Trade
+from app.db.models.contact import ContactRequest
 from app.db.models.file import FileObject
 from app.db.models.job import Job, JobApplication, JobSkill, JobSource, JobSourceEvent
 from app.db.models.mixins import SoftDeleteMixin, VersionMixin
 from app.db.models.moderation import NotificationEvent, Report
+from app.db.models.notification import Notification
 from app.db.models.organization import Organization, OrganizationMembership
 from app.db.models.user import RefreshSession, SecurityToken, User
 from app.db.models.verification import Verification, VerificationRequest
@@ -36,6 +38,7 @@ install_enum_checks(Base.metadata)
 
 __all__ = [
     "AuditLog",
+    "ContactRequest",
     "County",
     "Credential",
     "EvidenceItem",
@@ -45,6 +48,7 @@ __all__ = [
     "JobSkill",
     "JobSource",
     "JobSourceEvent",
+    "Notification",
     "NotificationEvent",
     "Organization",
     "OrganizationMembership",

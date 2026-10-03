@@ -16,6 +16,7 @@ from app.api.serializers import (
     to_project_response,
     to_public_profile,
 )
+from app.core.constants import VerificationTargetType
 from app.db.models.catalogue import County
 from app.schemas.common import (
     ErrorResponse,
@@ -47,6 +48,7 @@ from app.schemas.workers import (
     WorkerTradesUpdateRequest,
 )
 from app.services.auth_service import RequestContext
+from app.services.verification_service import VerificationService
 from app.services.worker_service import WorkerProfileService
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
@@ -268,7 +270,11 @@ def create_my_experience(
     profile = service.get_for_user(current_user)
     record = service.create_experience(actor=current_user, profile_id=profile.id, payload=payload)
     return ResponseEnvelope(
-        data=to_experience_response(record, county=_county_of(session, record.county_id)),
+        data=to_experience_response(
+            record,
+            county=_county_of(session, record.county_id),
+            verification=_attestation(session, EXPERIENCE_TARGET, record.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -291,7 +297,14 @@ def list_my_experiences(
         profile=profile, limit=page_size, offset=(page - 1) * page_size
     )
     return WorkExperienceListResponse(
-        data=[to_experience_response(row) for row in rows],
+        data=[
+            to_experience_response(
+                row,
+                county=_county_of(session, row.county_id),
+                verification=_attestation(session, EXPERIENCE_TARGET, row.id),
+            )
+            for row in rows
+        ],
         meta=_page(page, page_size, total, None),
     )
 
@@ -316,7 +329,11 @@ def read_my_experience(
     profile = service.get_for_user(current_user)
     record = service.get_experience(profile=profile, experience_id=experience_id)
     return ResponseEnvelope(
-        data=to_experience_response(record, county=_county_of(session, record.county_id)),
+        data=to_experience_response(
+            record,
+            county=_county_of(session, record.county_id),
+            verification=_attestation(session, EXPERIENCE_TARGET, record.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -349,7 +366,11 @@ def update_my_experience(
         payload=payload,
     )
     return ResponseEnvelope(
-        data=to_experience_response(record, county=_county_of(session, record.county_id)),
+        data=to_experience_response(
+            record,
+            county=_county_of(session, record.county_id),
+            verification=_attestation(session, EXPERIENCE_TARGET, record.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -434,7 +455,11 @@ def create_my_project(
     profile = service.get_for_user(current_user)
     project = service.create_project(actor=current_user, profile_id=profile.id, payload=payload)
     return ResponseEnvelope(
-        data=to_project_response(project, county=_county_of(session, project.county_id)),
+        data=to_project_response(
+            project,
+            county=_county_of(session, project.county_id),
+            verification=_attestation(session, PROJECT_TARGET, project.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -457,7 +482,15 @@ def list_my_projects(
         profile=profile, limit=page_size, offset=(page - 1) * page_size, include_confidential=True
     )
     return ProjectListResponse(
-        data=[to_project_response(row) for row in rows], meta=_page(page, page_size, total, None)
+        data=[
+            to_project_response(
+                row,
+                county=_county_of(session, row.county_id),
+                verification=_attestation(session, PROJECT_TARGET, row.id),
+            )
+            for row in rows
+        ],
+        meta=_page(page, page_size, total, None),
     )
 
 
@@ -481,7 +514,11 @@ def read_my_project(
     profile = service.get_for_user(current_user)
     project = service.get_project(profile=profile, project_id=project_id)
     return ResponseEnvelope(
-        data=to_project_response(project, county=_county_of(session, project.county_id)),
+        data=to_project_response(
+            project,
+            county=_county_of(session, project.county_id),
+            verification=_attestation(session, PROJECT_TARGET, project.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -510,7 +547,11 @@ def update_my_project(
         actor=current_user, profile_id=profile.id, project_id=project_id, payload=payload
     )
     return ResponseEnvelope(
-        data=to_project_response(project, county=_county_of(session, project.county_id)),
+        data=to_project_response(
+            project,
+            county=_county_of(session, project.county_id),
+            verification=_attestation(session, PROJECT_TARGET, project.id),
+        ),
         meta=Meta(request_id=ctx.request_id),
     )
 
@@ -571,6 +612,22 @@ def read_worker_profile(
     county, _ = service.load_counties(profile)
     return ResponseEnvelope(
         data=to_public_profile(profile, county=county), meta=Meta(request_id=ctx.request_id)
+    )
+
+
+EXPERIENCE_TARGET = VerificationTargetType.EXPERIENCE.value
+PROJECT_TARGET = VerificationTargetType.PROJECT.value
+
+
+def _attestation(session: Session, target_type: str, target_id: uuid.UUID) -> object:
+    """The current attestation for a claim, or ``None``.
+
+    Derived from the ``verifications`` row rather than stored on the claim, so a
+    revoked attestation withdraws the indicator instead of leaving it stale. A
+    declined request reads as "no attestation", not as a verdict on the claim.
+    """
+    return VerificationService(session).verification_for_target(
+        target_type=target_type, target_id=target_id
     )
 
 

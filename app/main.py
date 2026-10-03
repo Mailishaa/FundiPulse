@@ -27,6 +27,7 @@ from app.api.middleware import (
     SecurityHeadersMiddleware,
     build_cors_middleware,
 )
+from app.api.rate_limit_middleware import RateLimitHeaderMiddleware
 from app.api.router import api_router, health_router
 from app.core.config import Settings, get_settings
 from app.core.constants import API_DESCRIPTION, APP_NAME, APP_VERSION
@@ -139,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if cors is not None:
         app.add_middleware(cors)
     app.add_middleware(SecurityHeadersMiddleware, settings=resolved)
+    app.add_middleware(RateLimitHeaderMiddleware)
     app.add_middleware(RequestIdMiddleware)
 
     register_exception_handlers(app)

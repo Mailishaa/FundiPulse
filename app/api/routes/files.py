@@ -15,7 +15,7 @@ import uuid
 from fastapi import APIRouter, Depends, Form, Path, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import CurrentUser, DbSession, get_request_context
+from app.api.dependencies import CurrentUser, DbSession, FileUploadRateLimit, get_request_context
 from app.db.models.file import FileObject
 from app.schemas.common import ErrorResponse, Meta, ResponseEnvelope
 from app.schemas.files import (
@@ -105,6 +105,7 @@ def _file_response(record: FileObject) -> FileResponse:
     },
 )
 def upload_file(
+    _limit: FileUploadRateLimit,
     payload: Annotated[FileUploadRequest, Form()],
     session: DbSession,
     current_user: CurrentUser,

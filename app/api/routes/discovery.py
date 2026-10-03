@@ -13,7 +13,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from pydantic import ValidationError
 
-from app.api.dependencies import DbSession, OptionalUser, get_request_context
+from app.api.dependencies import (
+    DbSession,
+    OptionalUser,
+    SearchRateLimit,
+    get_request_context,
+)
 from app.core.constants import MAX_PAGE_NUMBER, MAX_PAGE_SIZE, MIN_PAGE_SIZE, AvailabilityStatus
 from app.core.exceptions import ErrorDetail, ValidationError as AppValidationError
 from app.schemas.common import ErrorResponse, Meta, PaginatedResponseEnvelope, PaginationMeta
@@ -53,6 +58,7 @@ Code = Annotated[
 def search_workers(
     session: DbSession,
     _viewer: OptionalUser,
+    _limit: SearchRateLimit,
     ctx: Ctx,
     trade: Code = None,
     skill: Code = None,

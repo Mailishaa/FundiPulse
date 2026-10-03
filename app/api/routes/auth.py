@@ -25,6 +25,9 @@ from app.api.dependencies import (
     CurrentSessionId,
     CurrentUser,
     DbSession,
+    LoginRateLimit,
+    PasswordResetRateLimit,
+    RegisterRateLimit,
     get_request_context,
 )
 from app.schemas.auth import (
@@ -101,6 +104,7 @@ def register(
     payload: RegisterRequest,
     session: DbSession,
     context: Annotated[RequestContext, Depends(get_request_context)],
+    _limit: RegisterRateLimit,
 ) -> ResponseEnvelope[AuthSessionResponse]:
     user, verification_token, tokens = AuthService(session).register(
         email=payload.email,
@@ -147,6 +151,7 @@ def login(
     payload: LoginRequest,
     session: DbSession,
     context: Annotated[RequestContext, Depends(get_request_context)],
+    _limit: LoginRateLimit,
 ) -> ResponseEnvelope[AuthSessionResponse]:
     user, tokens = AuthService(session).authenticate(
         email=payload.email,
@@ -283,6 +288,7 @@ def forgot_password(
     payload: ForgotPasswordRequest,
     session: DbSession,
     context: Annotated[RequestContext, Depends(get_request_context)],
+    _limit: PasswordResetRateLimit,
 ) -> ResponseEnvelope[VerificationDispatchResponse]:
     auth = AuthService(session)
     token = auth.request_password_reset(email=payload.email, context=context)
@@ -335,6 +341,7 @@ def reset_password(
     payload: ResetPasswordRequest,
     session: DbSession,
     context: Annotated[RequestContext, Depends(get_request_context)],
+    _limit: PasswordResetRateLimit,
 ) -> ResponseEnvelope[PasswordChangeResponse]:
     AuthService(session).complete_password_reset(
         token=payload.token,
@@ -397,6 +404,7 @@ def resend_verification(
     session: DbSession,
     current_user: CurrentUser,
     context: Annotated[RequestContext, Depends(get_request_context)],
+    _limit: PasswordResetRateLimit,
 ) -> ResponseEnvelope[VerificationDispatchResponse]:
     token = AuthService(session).resend_email_verification(user=current_user, context=context)
     if token:

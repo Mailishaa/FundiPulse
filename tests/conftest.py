@@ -61,7 +61,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.constants import UserRole  # noqa: E402
-from app.db.session import get_db, get_engine, get_session_factory, reset_engine  # noqa: E402
+from app.db.session import get_db, get_engine, reset_engine  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -114,21 +114,37 @@ def engine() -> Generator[Engine, None, None]:
 
 @pytest.fixture
 def db_session() -> Generator[Session, None, None]:
-    """A session whose work is rolled back at the end of the test.
+    """A session whose every write is discarded at the end of the test.
 
-    The outermost transaction is started explicitly and rolled back, so even a
-    test that commits its inner work leaves nothing behind.
+    Two layers, because one is not enough:
+
+    1. The connection opens an explicit transaction that is rolled back in the
+       teardown. Nothing a test writes can survive.
+    2. The session joins that transaction in ``create_savepoint`` mode, so a
+       ``commit()`` *inside* a test releases a savepoint instead of committing.
+
+    Layer 2 is what makes isolation actually hold. ``AuditService.record_durable``
+    commits on the caller's session by design - a failure event must outlive the
+    rollback of the effect it describes. With an ordinary session that commit
+    escapes the test boundary and takes any uncommitted fixture rows with it, so
+    ``LOGIN_FAILURE``, ``TOKEN_REUSE_DETECTED`` and ``ACCOUNT_DISABLED`` tests
+    leaked rows into the shared test database on every run.
+
+    A savepoint on the same connection keeps the durable write real - it is
+    visible to the rest of the test - while still being undone at teardown. A
+    second connection would not work: the row it wrote would reference a user the
+    first connection has not committed yet, so its own foreign key would fail.
     """
-    session = get_session_factory()()
+    connection = get_engine().connect()
+    outer = connection.begin()
+    session = Session(bind=connection, join_transaction_mode="create_savepoint")
     try:
         yield session
     finally:
-        # Rollback discards everything the test wrote. No explicit outer
-        # transaction is opened: `AuditService.record_durable` commits internally
-        # when it records a failure, and an explicit outer transaction would be
-        # closed by that commit and could no longer be rolled back here.
-        session.rollback()
         session.close()
+        if outer.is_active:
+            outer.rollback()
+        connection.close()
 
 
 @pytest.fixture

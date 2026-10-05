@@ -25,7 +25,7 @@ COPY requirements/ ./requirements/
 # into the system site-packages, so it can be copied out without pip or headers.
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
-    && /opt/venv/bin/pip install --no-compiler -r requirements/base.txt
+    && /opt/venv/bin/pip install -r requirements/base.txt
 
 
 # --------------------------------------------------------------------------- #

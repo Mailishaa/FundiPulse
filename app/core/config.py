@@ -371,10 +371,10 @@ class Settings(BaseSettings):
         so that an operator must take a deliberate, visible action to expose
         them.
         """
-        if self.app_env == "production" and self.enable_docs is True:
-            object.__setattr__(self, "enable_docs", False)
+        # ENABLE_DOCS is controlled explicitly through the environment.
+# This allows operators to enable Swagger when needed in production.
         if self.app_env == "development" and self.enable_docs is False:
-            # Explicit opt-out is respected in development too.
+    # Explicit opt-out is respected in development too.
             pass
         return self
 

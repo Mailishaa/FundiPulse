@@ -47,7 +47,7 @@ services:
 
       # Swagger is force-disabled in production regardless of this value.
       - key: ENABLE_DOCS
-        value: "false"
+        value: "true"
       - key: LOG_LEVEL
         value: INFO
 

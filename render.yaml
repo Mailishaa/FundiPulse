@@ -18,11 +18,19 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health/ready
 
-    # Migrations run before the new version serves traffic, not at application
-    # start-up. A failed migration would otherwise leave one container running new
-    # code against an old schema while another runs old code against the same
-    # database.
-    preDeployCommand: alembic upgrade head
+    # NO preDeployCommand. Render Free provides neither a shell nor a Pre-Deploy
+    # Command, so declaring one here is silently ignored — which is how this
+    # service came to run against a database with no schema at all: the config
+    # looked correct and the migrations never ran.
+    #
+    # Migrations instead run from docker/entrypoint.sh during container startup,
+    # before Uvicorn binds the port. On Free there is a single instance, so there
+    # is no rolling deploy for a migration to straddle, and `alembic upgrade head`
+    # tracks applied revisions, so restarting is a no-op once the schema is current.
+    #
+    # If this ever moves to a paid plan with multiple instances, put the migration
+    # back as `preDeployCommand: alembic upgrade head` and drop it from the
+    # entrypoint. See docs/deployment.md.
 
     envVars:
       - key: APP_ENV

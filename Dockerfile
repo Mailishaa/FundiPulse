@@ -58,6 +58,14 @@ COPY --chown=fundipulse:fundipulse alembic.ini ./
 COPY --chown=fundipulse:fundipulse app/ ./app/
 COPY --chown=fundipulse:fundipulse pyproject.toml ./
 
+# Render Free offers neither a shell nor a Pre-Deploy Command, so the migrations
+# run from the entrypoint during startup instead of before the deploy. Owned by
+# the runtime user and mode 0755 so it is readable and executable by `fundipulse`
+# and by nobody else writeable. It only needs read access to the code and network
+# access to the database: no migration writes to the filesystem, and
+# PYTHONDONTWRITEBYTECODE=1 means Python writes no .pyc files either.
+COPY --chown=fundipulse:fundipulse --chmod=0755 docker/entrypoint.sh ./docker/entrypoint.sh
+
 USER fundipulse
 
 EXPOSE 8080
@@ -70,4 +78,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # Bind to 0.0.0.0 so the platform's router can reach it, and honour $PORT which
 # Render sets. One worker per container: the rate-limit counters are in-process,
 # and the docs say so; scale with more containers and RATE_LIMIT_BACKEND=redis.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --proxy-headers --forwarded-allow-ips='*'"]
+#
+# The entrypoint runs `alembic upgrade head` first and then execs this exact
+# Uvicorn command, so the schema is in place before the first request. Render
+# Free has no Pre-Deploy Command, so this is the only place migrations can run.
+CMD ["/app/docker/entrypoint.sh"]

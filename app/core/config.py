@@ -181,6 +181,31 @@ class Settings(BaseSettings):
     cors_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     cors_allow_credentials: bool = False
 
+    # ------------------------------------------------------- email / SMTP --
+    #: Outbound SMTP. An empty ``email_smtp_host`` means "no provider
+    #: configured", which is the signal ``get_delivery_channel`` uses to keep the
+    #: safe-failure channel installed in production.
+    email_smtp_host: str = ""
+    email_smtp_port: int = Field(default=587, ge=1, le=65535)
+    #: Leave empty for an unauthenticated relay. When set, the password must be
+    #: too - see :meth:`_validate_relationships`.
+    email_smtp_username: str = ""
+    #: Secret. Never logged and never returned by an API response.
+    email_smtp_password: SecretStr = SecretStr("")
+    #: Envelope sender. Most relays reject a ``From`` outside the domain the
+    #: credentials authenticate against, so it is usually the same address as
+    #: the username.
+    email_smtp_from: str = ""
+    #: STARTTLS over a plain connection (port 587). Leave false for an
+    #: already-encrypted connection (port 465), where the port decides.
+    email_smtp_use_tls: bool = True
+    #: Human-readable sender name. Defaults to the product name so a worker sees
+    #: "FundiPulse" rather than a bare address in their inbox.
+    email_smtp_from_name: str = APP_NAME
+    #: Bounded so a wedged mail server cannot hold a request open. SMTP is a
+    #: network hop to a third party and the slowest thing registration does.
+    email_smtp_timeout_seconds: int = Field(default=10, ge=1, le=120)
+
     # ---------------------------------------------------------------- docs --
     enable_docs: bool = True
 
@@ -284,6 +309,11 @@ class Settings(BaseSettings):
             )
         if self.rate_limit_backend == "redis" and not self.redis_url.get_secret_value():
             raise ValueError("REDIS_URL is required when RATE_LIMIT_BACKEND=redis")
+        if self.email_smtp_username and not self.email_smtp_password.get_secret_value():
+            # Half a credential pair is always a configuration mistake, and it
+            # fails as a confusing authentication error at send time rather than
+            # as a clear message at boot.
+            raise ValueError("EMAIL_SMTP_PASSWORD is required when EMAIL_SMTP_USERNAME is set")
         if self.storage_backend == "s3":
             if not self.storage_bucket:
                 raise ValueError("STORAGE_BUCKET is required when STORAGE_BACKEND=s3")
@@ -398,6 +428,20 @@ class Settings(BaseSettings):
     def enforce_password_policy(self) -> bool:
         """Password rules always apply in production, regardless of the flag."""
         return self.is_production or self.password_policy_enforced
+
+    @property
+    def smtp_configured(self) -> bool:
+        """Whether a real outbound mail provider has been configured.
+
+        The host is the sole signal. Username, password and from-address are all
+        optional because an unauthenticated relay is a legitimate configuration,
+        and requiring them would make a working setup look unconfigured.
+
+        Used by ``get_delivery_channel`` to decide between real delivery and the
+        safe-failure channel. It is deliberately **not** consulted in
+        development, where the console channel is always installed.
+        """
+        return bool(self.email_smtp_host.strip())
 
     @property
     def session_cookie_secure(self) -> bool:

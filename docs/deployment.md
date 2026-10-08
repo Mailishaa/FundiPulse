@@ -122,6 +122,14 @@ Correctness-critical:
 
 | Variable | Default | Note |
 | --- | --- | --- |
+| `EMAIL_SMTP_HOST` | — | **Required for registration to work.** Empty keeps the safe-failure channel |
+| `EMAIL_SMTP_PORT` | `587` | Submission. Use `465` for implicit TLS |
+| `EMAIL_SMTP_USERNAME` | — | Leave empty only for an unauthenticated relay |
+| `EMAIL_SMTP_PASSWORD` | — | `sync: false`. Required whenever the username is set |
+| `EMAIL_SMTP_FROM` | — | Falls back to the username |
+| `EMAIL_SMTP_USE_TLS` | `true` | STARTTLS. `false` + port 465 means implicit TLS |
+| `EMAIL_SMTP_FROM_NAME` | `FundiPulse` | Display name in the worker's inbox |
+| `EMAIL_SMTP_TIMEOUT_SECONDS` | `10` | Bounds a wedged relay from holding a request open |
 | `RATE_LIMIT_BACKEND` | `memory` | Set `redis`. The memory store does not share counters, so N containers give N× the limit. |
 | `REDIS_URL` | — | Required when the backend is `redis`. |
 | `STORAGE_BACKEND` | `memory` | `s3` in production; `InMemoryStorage` is refused there. |
@@ -133,6 +141,103 @@ Correctness-critical:
 **No secret is committed.** `scripts/scan_secrets.py` runs in CI and compares
 against `.secrets.baseline`.
 
+## Email delivery
+
+Verification and password-reset mail is sent over SMTP using the standard
+library. There is no vendor SDK, so no dependency and no transitive
+vulnerability surface is added.
+
+### How the channel is chosen
+
+`app/services/delivery_service.py` installs exactly one channel:
+
+| Environment | `EMAIL_SMTP_HOST` | Channel |
+| --- | --- | --- |
+| development / test | anything | `ConsoleTokenDeliveryChannel` — logs the token |
+| production | set | `SMTPTokenDeliveryChannel` — real delivery |
+| production | empty | `NullTokenDeliveryChannel` — raises 503 |
+
+There is **no fallback from production to the console channel.** It would look
+like a healthy deployment while sending nothing, and the only symptom would be
+workers reporting they never received a verification email.
+
+`EMAIL_SMTP_USERNAME` set without `EMAIL_SMTP_PASSWORD` is refused at boot: half
+a credential pair otherwise fails much later as an opaque authentication error at
+send time.
+
+### Configure it on Render
+
+Set these in the dashboard. `EMAIL_SMTP_PASSWORD` is `sync: false`, so it must
+be entered by hand and never committed.
+
+```
+EMAIL_SMTP_HOST=smtp.your-provider.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USERNAME=postmaster@yourdomain.co.ke
+EMAIL_SMTP_PASSWORD=<the provider's app password>
+EMAIL_SMTP_FROM=postmaster@yourdomain.co.ke
+EMAIL_SMTP_USE_TLS=true
+```
+
+Use the provider's **app password**, not the mailbox password: Gmail, Outlook and
+most hosted providers require one, and several refuse basic auth on a real
+password. `EMAIL_SMTP_FROM` must be on the domain the credentials authenticate
+against, or the relay rejects it.
+
+### What happens if it is misconfigured or unreachable
+
+| Situation | Behaviour |
+| --- | --- |
+| Registration, delivery fails | **503**, transaction rolled back, **no account created** |
+| Password reset, delivery fails | **202**, byte-identical to success |
+| Resend verification, delivery fails | **202**, for the same reason |
+| Delivery succeeds | the token reaches the worker; nothing else changes |
+
+Reset and resend must not disclose delivery state: reporting "delivery failed"
+would confirm whether an account exists. That is an enumeration oracle, so those
+two routes swallow the error and answer exactly as they would on success.
+
+Registration is the opposite case. The account cannot be used without
+verification, so a registration whose email did not send must not persist. `get_db`
+commits only after the route returns cleanly, so the rollback happens naturally.
+This is asserted directly against `get_db` in
+`tests/unit/test_email_delivery.py` rather than against the test harness's
+override, which deliberately has no rollback branch.
+
+### TLS
+
+STARTTLS, with certificate and hostname verification against the system trust
+store. A plain connection without TLS is **refused in production** rather than
+merely discouraged, because a verification link is a single-use bearer token and
+putting one on the wire in cleartext would hand it to anyone on the path. The
+refusal does not apply outside production, so a developer's local relay still
+works.
+
+### Secrets
+
+`EMAIL_SMTP_PASSWORD` is a `SecretStr`, so it is absent from `repr()` and from
+the settings object. The delivery channel does not hold it either: it reads the
+password from the process settings at send time, so neither a stack trace nor a
+debugger can expose it. No log record, exception message or response body carries
+the password or the token, and tests assert both.
+
+### The verification link
+
+Links are built from the **first** `CORS_ALLOWED_ORIGINS` entry:
+
+- `POST /auth/verify-email` → `{origin}/verify-email?token=…`
+- password reset → `{origin}/reset-password?token=…`
+
+Two consequences worth knowing before this works end to end:
+
+1. That first origin must be the **PWA**, not the API. As configured today it is
+   the API's own origin, so the delivered links point at a service with no such
+   page.
+2. The worker PWA has **no `/verify-email` route**. A worker who clicks the link
+   gets a 404 and cannot activate their account. Adding that screen is front-end
+   work and was deliberately not part of this change.
+
+Both are reported rather than silently worked around.
 ## Container
 
 * Multi-stage build, so the runtime image carries no compiler and no `pip`.
@@ -192,9 +297,15 @@ one published password.
 5. `STORAGE_BACKEND=s3` with a private bucket.
 6. `MALWARE_SCANNING_ENABLED` decided deliberately. Off is safe but means evidence
    is not downloadable until a scanner exists.
-7. After the first deploy: `python -m app.db.seed --catalogues-only` has been run,
+7. `EMAIL_SMTP_HOST` and credentials are set. Without them `/auth/register`
+   returns **503** by design — see Email delivery above.
+8. `CORS_ALLOWED_ORIGINS[0]` is the PWA origin, so verification links resolve.
+9. After the first deploy: `python -m app.db.seed --catalogues-only` has been run,
    so the reference catalogues are populated.
-8. Health probes return 200 on `/health/ready`.
+10. Health probes return 200 on `/health/ready`.
+
+`POST /auth/register` returning 200 is the single check that covers items 7 and 8
+together: it only succeeds if the mail was actually accepted by the relay.
 
 Steps 1–6 are unchanged. Step 7 replaces the old "`alembic upgrade head` applied"
 item: on Free the entrypoint applies migrations during startup, so there is no
@@ -228,6 +339,13 @@ curl -sS "$BASE/trades" | jq '.meta.total_items'           # 20
 
 # Unauthenticated search returns 200; a private worker is absent.
 curl -sS "$BASE/workers" | jq '.meta.total_items'
+
+# Registration works end to end, which proves SMTP and the schema.
+# 200 = the verification mail was accepted by the relay.
+# 503 = EMAIL_SMTP_* is not configured.
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST "$BASE/auth/register" \
+  -H 'content-type: application/json' \
+  -d '{"email":"smoke@example.com","password":"BuildSite12345","role":"WORKER","accepted_terms":true}'
 
 # Authentication is enforced.
 curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/workers/me/profile"   # 401

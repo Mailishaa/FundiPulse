@@ -87,6 +87,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "docs_enabled": settings.enable_docs,
             "storage_backend": settings.storage_backend,
             "rate_limit_backend": settings.rate_limit_backend,
+            "smtp_host": settings.email_smtp_host,
+            "smtp_host_length": len(settings.email_smtp_host),
+            "smtp_configured": settings.smtp_configured,
+            "smtp_username_set": bool(settings.email_smtp_username),
+            "smtp_from": settings.email_smtp_from,
         },
     )
     try:
